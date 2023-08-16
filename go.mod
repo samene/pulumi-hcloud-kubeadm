@@ -1,6 +1,6 @@
 go 1.20
 
-module pulumi-hetzner-kubeadm
+module pulumi-hcloud-kubeadm
 
 require (
 	github.com/pulumi/pulumi-command/sdk v0.8.1

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"regexp"
 	"text/template"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -181,11 +182,14 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 		ret := make(map[string]interface{}, 0)
 		cConfig := make(map[string]interface{})
 		endPointConfig := make(map[string]interface{})
+		var kubeConfig string
 		kc, err := os.ReadFile(kubeconfigPaths[0])
 		if err != nil {
 			return nil, nil
 		}
+		m1 := regexp.MustCompile(`server:.*`)
 		if ictx.inventory.LoadBalancer != nil {
+			kubeConfig = m1.ReplaceAllString(string(kc), "server: https://"+ictx.inventory.LoadBalancer.PublicIP+":6443")
 			endPointConfig["app"] = ictx.inventory.LoadBalancer.PublicIP
 			endPointConfig["cluster-api"] = ictx.inventory.LoadBalancer.PublicIP
 			endPointConfig["type"] = "LoadBalancer"
@@ -196,10 +200,11 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 				endPointConfig["app"] = ictx.inventory.MasterIPs[0].PublicIP
 			}
 			endPointConfig["cluster-api"] = ictx.inventory.MasterIPs[0].PublicIP
+			kubeConfig = m1.ReplaceAllString(string(kc), "server: https://"+ictx.inventory.MasterIPs[0].PublicIP+":6443")
 			endPointConfig["type"] = "NodePort"
 		}
 		cConfig["endpoints"] = endPointConfig
-		cConfig["kubeconfig"] = string(kc)
+		cConfig["kubeconfig"] = kubeConfig
 		ret[clusterName] = cConfig
 		return ret, nil
 	}).(pulumi.MapOutput)
