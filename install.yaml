@@ -4,19 +4,7 @@
   - common
   any_errors_fatal: true
   tasks:
-  # - name: Install chrony
-  #   become: true
-  #   package:
-  #     name: chrony
-  #     state: present
-  # - name: Edit ntp.conf file to add primary and secondary ntp server
-  #   template: src=./templates/chrony.conf.j2 dest=/etc/chrony/chrony.conf
-  #   become: true
-  #   when: ansible_os_family == 'Debian'
   - block:
-    # - name: Edit ntp.conf file to add primary and secondary ntp server
-    #   template: src=./templates/chrony.conf.j2 dest=/etc/chrony.conf
-    #   become: true
     - name: Disable SELinux (1/2)
       shell: setenforce 0
       become: true
@@ -59,12 +47,6 @@
           - {"name": "docker", "description": "Docker repository", "url": "https://download.docker.com/linux/centos/8/x86_64/stable/"}
       when: ansible_distribution_major_version == '8'
     when: ansible_os_family == 'RedHat'
-  # - name: Restart ntp
-  #   service: name=chronyd state=restarted
-  #   become: yes
-  # - name: Wait for ntp sync
-  #   pause:
-  #     seconds: 20
 
 - name: Setup load balancer
   hosts: loadbalancer
