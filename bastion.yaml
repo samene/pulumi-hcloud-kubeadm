@@ -1,0 +1,59 @@
+---
+- name: Configure NAT for bastion host
+  hosts: bastion
+  gather_facts: false
+  become: true
+  tasks:
+  - name: Enable IP forwarding
+    shell: "cat /proc/sys/net/ipv4/ip_forward | grep -q 1 || echo 1 > /proc/sys/net/ipv4/ip_forward"
+  - name: Add NAT rule in iptables
+    shell: "iptables-save  | grep 'POSTROUTING -s {{ network_cidr }}' || iptables -t nat -A POSTROUTING -s '{{ network_cidr }}' -o eth0 -j MASQUERADE"
+  - name: Configure NAT
+    blockinfile:
+      path: /etc/network/interfaces
+      create: true
+      block: |
+        auto eth0
+        iface eth0 inet dhcp
+            post-up echo 1 > /proc/sys/net/ipv4/ip_forward
+            post-up iptables -t nat -A POSTROUTING -s '{{ network_cidr }}' -o eth0 -j MASQUERADE
+
+- name: Configure NAT
+  hosts: '!bastion'
+  become: true
+  gather_facts: false
+  tasks:
+  - block:
+    - lineinfile:
+        path: /etc/systemd/resolved.conf
+        regexp: '^DNS='
+        line: DNS=185.12.64.2 185.12.64.1
+      register: dns
+    - shell: "systemctl restart systemd-resolved.service"
+      when: dns.changed
+    - name: Get interface name
+      shell: "ip route list {{ network_cidr }} | rev | awk '{print $1}' | rev"
+      register: iface
+    - name: Add IP route
+      shell: "ip route list | grep 'default via {{ gateway }} dev {{ iface.stdout }}' || ip route add default via {{ gateway }}"
+    - name: Configure NAT
+      blockinfile:
+        path: /etc/network/interfaces
+        create: true
+        block: |
+          auto {{ iface.stdout }}
+          iface {{ iface.stdout }} inet dhcp
+              post-up ip route add default via {{ gateway }}
+    when: nat | bool
+
+- name: Install package
+  hosts: '!bastion'
+  become: true
+  gather_facts: false
+  tasks:
+  - name: Install package
+    apt:
+      name: ifupdown
+      update_cache: yes
+      state: latest
+    become: true

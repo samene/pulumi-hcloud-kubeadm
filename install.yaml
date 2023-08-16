@@ -1,0 +1,398 @@
+- name: Common tasks
+  hosts: '!bastion'
+  tags:
+  - common
+  any_errors_fatal: true
+  tasks:
+  # - name: Install chrony
+  #   become: true
+  #   package:
+  #     name: chrony
+  #     state: present
+  # - name: Edit ntp.conf file to add primary and secondary ntp server
+  #   template: src=./templates/chrony.conf.j2 dest=/etc/chrony/chrony.conf
+  #   become: true
+  #   when: ansible_os_family == 'Debian'
+  - block:
+    # - name: Edit ntp.conf file to add primary and secondary ntp server
+    #   template: src=./templates/chrony.conf.j2 dest=/etc/chrony.conf
+    #   become: true
+    - name: Disable SELinux (1/2)
+      shell: setenforce 0
+      become: true
+    - name: Disable SELinux (2/2)
+      shell: sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
+      become: true
+    - name: Disable firewall (1/2)
+      shell: "systemctl stop firewalld || true"
+      become: true
+    - name: Disable firewall (2/2)
+      shell: "systemctl disable firewalld || true"
+      become: true
+    - block:
+      - name: Add repository
+        yum_repository:
+          name: "{{ item.name }}"
+          description: "{{ item.description }}"
+          baseurl: "{{ item.url }}"
+          gpgcheck: false
+        become: true
+        loop: "{{ packages }}"
+        vars:
+          packages:
+          - {"name": "baseos", "description": "Base OS repository", "url": "http://yum.oracle.com/repo/OracleLinux/OL7/latest/x86_64"}
+          - {"name": "docker", "docker repository": "Docker repository", "url": "https://download.docker.com/linux/centos/7/x86_64/stable/"}
+      when: ansible_distribution_major_version == '7'
+    - block:
+      - name: Add repository
+        yum_repository:
+          name: "{{ item.name }}"
+          description: "{{ item.description }}"
+          baseurl: "{{ item.url }}"
+          gpgcheck: false
+        become: true
+        loop: "{{ packages }}"
+        vars:
+          packages:
+          - {"name": "baseos", "description": "Base OS repository", "url": "http://yum.oracle.com/repo/OracleLinux/OL8/baseos/latest/x86_64"}
+          - {"name": "appstream", "description": "Appstream repository", "url": "http://yum.oracle.com/repo/OracleLinux/OL8/appstream/x86_64"}
+          - {"name": "docker", "description": "Docker repository", "url": "https://download.docker.com/linux/centos/8/x86_64/stable/"}
+      when: ansible_distribution_major_version == '8'
+    when: ansible_os_family == 'RedHat'
+  # - name: Restart ntp
+  #   service: name=chronyd state=restarted
+  #   become: yes
+  # - name: Wait for ntp sync
+  #   pause:
+  #     seconds: 20
+
+- name: Setup load balancer
+  hosts: loadbalancer
+  tags:
+  - loadbalancer
+  any_errors_fatal: true
+  tasks:
+  - name: Install haproxy
+    package:
+      name: haproxy
+    become: true
+  - name: Configure haproxy
+    template: src=./templates/haproxy.cfg.j2 dest=/etc/haproxy/haproxy.cfg
+    become: true
+  - name: Start haproxy service
+    service:
+      name: "haproxy"
+      state: restarted
+    become: true    
+
+- name: Common tasks
+  hosts: '!loadbalancer,!bastion'
+  tags:
+  - k8s
+  gather_subset:
+  - 'min'
+  any_errors_fatal: true
+  tasks:
+  - name: Install kernel modules
+    community.general.modprobe:
+      name: "{{item}}"
+      state: present
+      persistent: present
+    become: true
+    with_items:
+    - overlay
+    - br_netfilter
+  - name: Install kernel modules
+    community.general.modprobe:
+      name: "{{item}}"
+      state: present
+      persistent: present
+    become: true
+    with_items:
+    - iptable_nat
+    - iptable_raw
+    - iptable_mangle
+    - iptable_filter
+    - xt_REDIRECT
+    - xt_conntrack
+    - xt_owner
+    - xt_tcpudp
+    when: ansible_os_family == 'RedHat'
+  - name: Configure sysctl
+    sysctl:
+      name: "{{item.name}}"
+      value: "{{item.value}}"
+      state: present
+      reload: yes
+    ignore_errors: true
+    become: true
+    with_items:
+    - {name: net.ipv4.ip_forward, value: 1}
+    - {name: net.bridge.bridge-nf-call-ip6tables, value: 1}
+    - {name: net.bridge.bridge-nf-call-iptables, value: 1}
+    - {name: kernel.pid_max, value: 4194303}
+    - {name: fs.inotify.max_user_instances, value: 8192}
+    - {name: fs.file-max, value: 1024000}
+    - {name: net.ipv4.ip_local_port_range, value: "11000 65535"}
+    - {name: net.ipv4.tcp_max_tw_buckets, value: 2000000}
+    - {name: net.ipv4.tcp_tw_reuse, value: 1}
+    - {name: net.ipv4.tcp_fin_timeout, value: 10}
+    - {name: net.ipv4.tcp_slow_start_after_idle, value: 0}
+    - {name: net.ipv4.tcp_low_latency, value: 1}
+    - {name: net.core.somaxconn, value: 40960}
+    - {name: net.netfilter.nf_conntrack_tcp_be_liberal, value: 1}
+
+  - name: Disable swap (1/2)
+    shell: |
+      swapoff -a
+  - name: Disable swap (2/2)
+    replace:
+      path: /etc/fstab
+      regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
+      replace: '# \1'
+  - block:
+    - name: Install pre-requisite packages
+      package:
+        name: "{{item}}"
+        state: present
+      become: true
+      with_items:
+      - curl
+      - apt-transport-https
+      - ca-certificates
+      - gpg
+      - jq
+    when: ansible_os_family == 'Debian'
+  - block:
+    - name: Install pre-requisite packages
+      package:
+        name: "{{item}}"
+        state: present
+      become: true
+      with_items:
+      - curl
+      - ca-certificates
+      - iscsi-initiator-utils
+      - gpg
+      - jq
+      - iproute-tc
+    - name: Enable iscsid
+      systemd:
+        name: iscsid
+        state: started
+        enabled: yes
+      become: true
+    when: ansible_os_family == 'RedHat'    
+  - block:
+    - name: Get apt key
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      become: true
+    - name: Add apt repository
+      apt_repository:
+        repo: "deb https://apt.kubernetes.io/ kubernetes-xenial main"
+        state: present
+        filename: kubernetes
+        update_cache: true
+      become: true
+    when: ansible_os_family == 'Debian'
+  - block:
+    - name: Add yum repository
+      yum_repository:
+        name: kubernetes
+        description: kubernetes repository
+        baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-$basearch
+        gpgkey:
+        - https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+        enabled: true
+        exclude:
+        - kubelet
+        - kubeadm
+        - kubectl
+      become: true
+    when: ansible_os_family == 'RedHat'
+  - name: Install containerd
+    package:
+      name: containerd
+      state: present
+    become: true
+    register: install_containerd
+  - name: Configure containerd (1/3)
+    shell: "mkdir -p /etc/containerd && containerd config default | tee /etc/containerd/config.toml"
+    args:
+      creates: /etc/containerd/config.toml
+    become: true
+  - name: Configure containerd (2/3)
+    shell: "sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml"
+    become: true
+  - name: Configure containerd (3/3)
+    lineinfile:
+      path: /etc/containerd/config.toml
+      regexp: 'disabled_plugins'
+      state: absent
+    become: true
+  - name: Restart containerd
+    systemd: 
+      name: containerd
+      state: restarted
+      daemon_reload: true
+      enabled: true
+    become: true
+    when: install_containerd.changed
+  - block:
+    - name: Install kubernetes packages
+      apt:
+        update_cache: yes
+        name: ['kubeadm={{ kubernetes_version }}','kubelet={{ kubernetes_version }}', 'kubectl={{ kubernetes_version }}']
+      become: true
+    when: ansible_os_family == 'Debian'
+  - block:
+    - name: Install kubernetes packages
+      yum:
+        name: ['kubeadm-{{ kubernetes_version }}','kubelet-{{ kubernetes_version }}', 'kubectl-{{ kubernetes_version }}']
+        disable_excludes: kubernetes
+      become: true
+    when: ansible_os_family == 'RedHat'
+  - name: Start kubelet
+    systemd:
+      name: kubelet
+      state: started
+      enabled: true
+    become: true
+
+- name: Control plane
+  hosts: master[0]
+  tags:
+  - controlplane
+  any_errors_fatal: true
+  tasks:
+  - shell: "kubeadm certs certificate-key"
+    register: cert_key
+    become: true
+  - set_fact:
+      certificate_key: "{{ cert_key.stdout }}"
+      cp_endpoint: "{% if groups['loadbalancer']|length > 0 %}{{hostvars[groups['loadbalancer'][0]].public_ip}}{% else %}{{ hostvars[groups['master'][0]].private_ip}}{% endif %}"
+  - set_fact:
+      extra_args: "{% if cni == 'cilium' %}--skip-phases=addon/kube-proxy{% else %}--pod-network-cidr=10.244.0.0/16{% endif %}"
+  - name: Init
+    shell: "kubeadm init  {{ extra_args }} --control-plane-endpoint={{ cp_endpoint }} --apiserver-cert-extra-sans={{ public_ip }} --upload-certs --certificate-key={{certificate_key}}"
+    args:
+      creates: /etc/kubernetes/admin.conf
+    become: true
+  - name: Get join command for control plane
+    shell: "kubeadm token create --print-join-command --certificate-key {{ certificate_key }}"
+    become: true
+    register: joincommand_cp
+  - name: Get join command for workers
+    shell: kubeadm token create --print-join-command
+    become: true
+    register: joincommand_worker
+  - name: Save join command - control plane
+    local_action:
+      module: copy
+      dest: /tmp/join-command-{{clustername}}-cp
+      content: "{{joincommand_cp.stdout}}"
+  - name: Save join command - worker
+    local_action:
+      module: copy
+      dest: /tmp/join-command-{{clustername}}-worker
+      content: "{{joincommand_worker.stdout}}"
+
+- name: Control plane - HA
+  hosts: master
+  any_errors_fatal: true
+  tasks:
+  - name: Get join command
+    set_fact:
+      joincmd: "{{ lookup('file', '/tmp/join-command-{{clustername}}-cp') }}"
+    run_once: true
+  - name: Join cluster - HA control plane
+    become: true
+    shell: "{{joincmd}}"
+    args:
+      creates: /etc/kubernetes/kubelet.conf
+
+- name: CNI and metrics-server
+  hosts: master[0]
+  tags:
+  - cni
+  any_errors_fatal: true
+  tasks:
+  - name: Move kubeconfig
+    shell: "mkdir -p {{ansible_env.HOME}}/.kube && cp /etc/kubernetes/admin.conf {{ansible_env.HOME}}/.kube/config && chown {{ansible_user}}:{{ansible_user}} {{ansible_env.HOME}}/.kube/config"
+    args:
+      creates: "{{ansible_env.HOME}}/.kube/config"
+    become: true
+
+  - name: Untaint master if only 1 node cluster
+    shell: "kubectl taint node $(kubectl get nodes -o json | jq -r '.items[0].metadata.name') node-role.kubernetes.io/master:NoSchedule-"
+    when: "groups['worker']|length == 0" 
+
+  - name: Fetch kubeconfig
+    fetch:
+      src: "{{ansible_env.HOME}}/.kube/config"
+      dest: cluster-{{clustername}}.kubeconfig
+      flat: true
+
+  #- name: Change cluster and context name
+  #  local_action: 
+  #    module: shell
+  #    _raw_params: "sed -i 's/kubernetes/{{clustername}}/g' cluster-{{clustername}}.kubeconfig"
+
+  - block:
+
+    - name: Install Flannel CNI (1/2)
+      shell: "kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/k8s-old-manifests/kube-flannel-rbac.yml"
+
+    - name: Install Flannel CNI (2/2)
+      shell: "kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/v0.21.5/Documentation/kube-flannel.yml"
+
+    when: "cni == 'flannel'"
+
+  - block:
+
+    - name: Check for already installed CNI
+      shell: "kubectl get daemonset cilium  -n kube-system -o jsonpath='{.status.numberReady}' --ignore-not-found=true"
+      register: ds
+    - block:
+      - set_fact:
+          cp_endpoint: "{% if groups['loadbalancer']|length > 0 %}{{hostvars[groups['loadbalancer'][0]].public_ip}}{% else %}{{hostvars[groups['master'][0]].ansible_default_ipv4.address}}{% endif %}"
+      - name: Download Cilium CNI
+        get_url:
+          url: "https://github.com/cilium/cilium-cli/releases/download/v0.14.6/cilium-linux-amd64.tar.gz"
+          dest: /tmp/cilium-linux-amd64.tar.gz
+      - name: Unpack Cilium CNI
+        shell: "tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin"
+        args:
+          chdir: /tmp
+          creates: /usr/local/bin/cilium
+        become: true
+      - name: Install Cilium CNI
+        shell: cilium install --helm-set kubeProxyReplacement=strict,k8sServiceHost={{cp_endpoint}},k8sServicePort=6443
+      when: ds.stdout|int|default(0) == 0
+
+    when: "cni == 'cilium'"
+
+  - name: Install metrics server (1/2)
+    copy:
+      src: ./files/metrics-server.yaml
+      dest: /tmp/metrics-server.yaml
+
+  - name: Install metrics server (2/2)
+    shell: kubectl apply -f /tmp/metrics-server.yaml
+
+- name: Workers
+  hosts: worker
+  tags:
+  - worker
+  any_errors_fatal: true
+  tasks:
+  - name: Get join command
+    set_fact:
+      joincmd: "{{ lookup('file', '/tmp/join-command-{{clustername}}-worker') }}"
+    run_once: true
+  - name: Join cluster
+    become: true
+    shell: "{{joincmd}}"
+    args:
+      creates: /etc/kubernetes/kubelet.conf

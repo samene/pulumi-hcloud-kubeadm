@@ -1,92 +1,103 @@
 # pulumi-hcloud-kubeadm
 
+A simple [Pulumi](https://www.pulumi.com/) project in Go to create Hetzner instances and install a kubernetes cluster on them using kubeadm
 
+## Pre-requisites
+- Go installed (min 1.18) - [How-to](https://go.dev/doc/install)
+- Pulumi installed (latest version recommended) - [How-to](https://www.pulumi.com/docs/install/)
+- Ansible installed (latest version recommended)
+- Hetzner account and API key
+- Supported images - `Ubuntu 22.04`
 
-## Getting started
+## How to Run
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+### Clone Repository
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/samene/pulumi-hcloud-kubeadm.git
-git branch -M main
-git push -uf origin main
+git clone git@gitlab.com:samene/pulumi-hcloud-kubeadm.git
+cd pulumi-hcloud-kubeadm
+``````
+
+### Initialize stack (only once)
+
+```
+pulumi stack init dev
 ```
 
-## Integrate with your tools
+### Configure Hetzner Settings
 
-- [ ] [Set up project integrations](https://gitlab.com/samene/pulumi-hcloud-kubeadm/-/settings/integrations)
+Set configuration for compute and networking
 
-## Collaborate with your team
+```
+pulumi config set networkZone eu-central        # replace with your desired hcloud zone
+pulumi config set image ubuntu-22.04            # replace with your desired os image (currently only ubuntu-22.04 supported)
+pulumi config set bastionFlavor cpx11           # replace with your desired flavor for bastion/NAT node
+pulumi config set masterFlavor cpx31            # replace with your desired flavor for clontrol plane nodes
+pulumi config set workerFlavor cpx41            # replace with your your desired flavor for worker nodes
+pulumi config set lbType lb11                   # replace with your desired flavor forload balancer type
+pulumi config set sshUser root                  # replace with ssh user name (usually root)
+```
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+Set configuration for authentication to HCloud server. 
 
-## Test and Deploy
+```
+pulumi config set hcloud:token XXXXXXXXXXXXXXXX          # replace with your API token (or set env variable)
+```
 
-Use the built-in continuous integration in GitLab.
+Set the path of the topology file (relative to current folder, or absolute path)
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+```
+pulumi config set topologyFile topology.yaml
+```
 
-***
+### Configure topology
 
-# Editing this README
+Create a file called `topology.yaml` with following format
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```
+clusters:
+  central:
+    kubernetes_version: 1.23.17-00
+    private_registry: my-docker-registry.com:5000/subpath
+    insecure_registries:     # list of docker registries to add to insecure registries
+    - "10.90.84.113:5000"    
+    load_balancer:
+      create: true           # create a load balancer node
+      port_mappings:         # target port mappings
+        https:
+          source: 443
+          target: 31390
+        http:
+          source: 80
+          target: 31394
+    ntp:
+      primary: 10.17.0.10
+      secondary: 10.17.0.11
+    control_plane:
+      node_count: 3   # 1 or 3 (if 3, one Load Balancer will be created)
+    worker:
+      node_count: 4   # if 0, control plane will be untainted to schedule workloads
+    cni: flannel      # flannel or cilium
+  edge-1:
+    kubernetes_version: 1.23.17-00
+    private_registry: my-docker-registry.com:5000/subpath
+    insecure_registries: []
+    load_balancer:
+      create: false
+    ntp:
+      primary: 10.17.0.10
+      secondary: 10.17.0.11
+    control_plane:
+      node_count: 1
+    worker:
+      node_count: 0
+    cni: flannel
+```
 
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+### Run
 
-## Name
-Choose a self-explaining name for your project.
+```
+pulumi up
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+The end result will be kubeconfig file(s) in your current directory for the newly created clusters.
