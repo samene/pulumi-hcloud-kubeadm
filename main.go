@@ -610,7 +610,6 @@ func NewClusterInfra(clusterName string) *infra {
 	inv := &Inventory{Cni: "flannel",
 		K8sversion:  "1.23.17-00",
 		User:        "root",
-		KeyFile:     "./id_rsa",
 		WorkerIPs:   workerIps,
 		MasterIPs:   cpIps,
 		Bastion:     &Node{},

@@ -45,7 +45,6 @@ type infra struct {
 
 type Inventory struct {
 	ClusterName        string
-	KeyFile            string
 	User               string
 	LoadBalancer       *Node
 	MasterIPs          []*Node
