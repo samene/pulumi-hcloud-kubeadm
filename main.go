@@ -411,7 +411,7 @@ func setupKeys(ctx *pulumi.Context, ictx *commonInfra) (err error) {
 		return
 	}
 	ictx.privateKey.PrivateKeyOpenssh.ApplyT(func(privateKey string) string {
-		os.WriteFile("/tmp/id_rsa", []byte(privateKey), 0600)
+		os.WriteFile("./id_rsa", []byte(privateKey), 0600)
 		return privateKey
 	})
 	ictx.sshKey, err = hcloud.NewSshKey(ctx, "pulumi-hcloud-kubeadm", &hcloud.SshKeyArgs{
