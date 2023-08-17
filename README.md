@@ -29,7 +29,8 @@ pulumi stack init dev
 Set configuration for compute and networking
 
 ```
-pulumi config set networkZone eu-central        # replace with your desired hcloud zone
+pulumi config set dataCenter ash-dc1            # replace with your desired datacenter
+pulumi config set networkZone us-east           # replace with your desired hcloud network zone
 pulumi config set image ubuntu-22.04            # replace with your desired os image (currently only ubuntu-22.04 supported)
 pulumi config set bastionFlavor cpx11           # replace with your desired flavor for bastion/NAT node
 pulumi config set masterFlavor cpx31            # replace with your desired flavor for clontrol plane nodes

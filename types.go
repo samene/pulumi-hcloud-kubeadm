@@ -17,6 +17,7 @@ type infrastructureConfig struct {
 	lbType        string
 	image         string
 	networkZone   string
+	dataCenter    string
 	sshUser       string
 }
 

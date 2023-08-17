@@ -55,6 +55,7 @@ func readConfig(ctx *pulumi.Context) (*infrastructureConfig, *Topology) {
 	infraCfg.workerFlavor = conf.Require("workerFlavor")
 	infraCfg.masterFlavor = conf.Require("masterFlavor")
 	infraCfg.networkZone = conf.Require("networkZone")
+	infraCfg.dataCenter = conf.Require("dataCenter")
 	infraCfg.bastionFlavor = conf.Require("bastionFlavor")
 	infraCfg.lbType = conf.Require("lbType")
 	infraCfg.image = conf.Require("image")
@@ -290,6 +291,7 @@ func setupWorkerNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ictx 
 	}
 	workerNode, err := hcloud.NewServer(ctx, fmt.Sprintf("worker-%s-%d", clusterName, index), &hcloud.ServerArgs{
 		Image:      pulumi.String(infraCfg.image),
+		Datacenter: pulumi.String(infraCfg.dataCenter),
 		ServerType: pulumi.String(infraCfg.workerFlavor),
 		SshKeys:    pulumi.StringArray{ictx.core.sshKey.ID()},
 		PublicNets: hcloud.ServerPublicNetArray{hcloud.ServerPublicNetArgs{
@@ -328,6 +330,7 @@ func setupCtrlPlaneNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ic
 	}
 	cpNode, err := hcloud.NewServer(ctx, fmt.Sprintf("control-plane-%s-%d", clusterName, index), &hcloud.ServerArgs{
 		Image:      pulumi.String(infraCfg.image),
+		Datacenter: pulumi.String(infraCfg.dataCenter),
 		ServerType: pulumi.String(flavor),
 		SshKeys:    pulumi.StringArray{ictx.core.sshKey.ID()},
 		PublicNets: hcloud.ServerPublicNetArray{hcloud.ServerPublicNetArgs{
@@ -360,6 +363,7 @@ func setupCtrlPlaneNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ic
 func setupNATAndBastionHost(ctx *pulumi.Context, infraCfg *infrastructureConfig, coreinfra *commonInfra) (err error) {
 	coreinfra.jumpServer, err = hcloud.NewServer(ctx, "jump-server", &hcloud.ServerArgs{
 		Image:      pulumi.String(infraCfg.image),
+		Datacenter: pulumi.String(infraCfg.dataCenter),
 		ServerType: pulumi.String(infraCfg.bastionFlavor),
 		SshKeys:    pulumi.StringArray{coreinfra.sshKey.ID()},
 		Networks: hcloud.ServerNetworkTypeArray{
@@ -460,6 +464,17 @@ func setupNetwork(ctx *pulumi.Context, infraCfg *infrastructureConfig, ictx *com
 					pulumi.String("10.0.1.0/24"),
 				},
 			},
+			// nodeports only from loadbalancer
+			&hcloud.FirewallRuleArgs{
+				Description: pulumi.String("worker-Nodeports"),
+				Direction:   pulumi.String("in"),
+				Protocol:    pulumi.String("tcp"),
+				Port:        pulumi.String("30000-32767"),
+				SourceIps: pulumi.StringArray{
+					pulumi.String("10.0.1.0/24"),
+				},
+			},
+			// workers can only be ssh'ed from bastion host
 			&hcloud.FirewallRuleArgs{
 				Direction: pulumi.String("in"),
 				Protocol:  pulumi.String("tcp"),
@@ -479,6 +494,16 @@ func setupNetwork(ctx *pulumi.Context, infraCfg *infrastructureConfig, ictx *com
 				Direction: pulumi.String("in"),
 				Protocol:  pulumi.String("tcp"),
 				Port:      pulumi.String("22"),
+				SourceIps: pulumi.StringArray{
+					pulumi.String("10.0.1.0/24"),
+				},
+			},
+			// nodeports only from loadbalancer
+			&hcloud.FirewallRuleArgs{
+				Description: pulumi.String("Ncp-odeports"),
+				Direction:   pulumi.String("in"),
+				Protocol:    pulumi.String("tcp"),
+				Port:        pulumi.String("30000-32767"),
 				SourceIps: pulumi.StringArray{
 					pulumi.String("10.0.1.0/24"),
 				},

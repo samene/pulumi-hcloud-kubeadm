@@ -4,6 +4,8 @@ cni: {{ .Cni }}
 
 {{- if .PrivateRegistry }}
 private_registry: {{ .PrivateRegistry }}
+{{- else }}
+private_registry: ""
 {{- end }}
 
 {{- $insec_reg := len .InsecureRegistries }}{{- if gt $insec_reg 0 }}
@@ -11,9 +13,8 @@ insecure_registries:
 {{- range $reg := .InsecureRegistries }}
 - {{ $reg }}
 {{- end }}
+{{- else }}
+insecure_registries: []
 {{- end }}
-
-ntp_server: time.google.com
-secondary_ntp_server: time.windows.com
 
 kubernetes_version: {{ .K8sversion }}
