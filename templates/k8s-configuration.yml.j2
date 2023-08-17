@@ -1,0 +1,18 @@
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+{% if private_registry != "" %}
+dns:
+  imageRepository: {{ private_registry }}/coredns
+imageRepository: {{ private_registry }}
+{% endif %}
+networking:
+  podSubnet: "10.244.0.0/16"
+controlPlaneEndpoint: {{ cp_endpoint }}
+apiServer:
+  certSANs:
+  - "{{ cp_endpoint }}"
+
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+certificateKey: {{certificate_key}}
