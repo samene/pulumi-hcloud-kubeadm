@@ -164,14 +164,14 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 		return
 	}
 	bastionSetup, err := local.NewCommand(ctx, fmt.Sprintf("ansible-setup-nat-%s", clusterName), &local.CommandArgs{
-		Create: pulumi.String(fmt.Sprintf("echo \"Waiting 60s...\" && sleep 60 && ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini ./bastion.yaml -vvv", clusterName)),
+		Create: pulumi.String(fmt.Sprintf("echo \"Waiting 60s...\" && sleep 60 && ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini ./bastion.yaml", clusterName)),
 		Delete: pulumi.StringPtr("rm -rf cluster-" + clusterName + ".kubeconfig"),
 	}, pulumi.DependsOn([]pulumi.Resource{inv}), pulumi.Parent(pulumik8sCluster))
 	if err != nil {
 		return nil, err
 	}
 	k8sAnsible, err := local.NewCommand(ctx, fmt.Sprintf("ansible-k8s-installer-%s", clusterName), &local.CommandArgs{
-		Create:     pulumi.String(fmt.Sprintf("ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini -e \"@variables-%s.yaml\" ./install.yaml -vvv", clusterName, clusterName)),
+		Create:     pulumi.String(fmt.Sprintf("ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini -e \"@variables-%s.yaml\" ./install.yaml", clusterName, clusterName)),
 		Delete:     pulumi.StringPtr("rm -rf cluster-" + clusterName + ".kubeconfig"),
 		AssetPaths: pulumi.ToStringArray([]string{"cluster-" + clusterName + ".kubeconfig"}),
 	}, pulumi.DependsOn([]pulumi.Resource{bastionSetup}), pulumi.Parent(pulumik8sCluster))
