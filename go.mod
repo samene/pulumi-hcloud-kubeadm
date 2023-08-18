@@ -3,7 +3,7 @@ go 1.20
 module pulumi-hcloud-kubeadm
 
 require (
-	github.com/pulumi/pulumi-command/sdk v0.8.1
+	github.com/pulumi/pulumi-command/sdk v0.7.2
 	github.com/pulumi/pulumi-hcloud/sdk v1.14.0
 	github.com/pulumi/pulumi-tls/sdk/v4 v4.10.0
 	github.com/pulumi/pulumi/sdk/v3 v3.76.1
