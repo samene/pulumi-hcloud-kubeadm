@@ -1,6 +1,6 @@
 [bastion]
 {{- if .Bastion }}
-{{ .Bastion.PublicIP }}
+{{ .Bastion.PrivateIP }}
 {{- end }}
 
 [loadbalancer]
@@ -30,5 +30,5 @@ ansible_ssh_private_key_file="./id_rsa"
 network_cidr=10.0.0.0/16
 gateway=10.0.0.1
 {{- if .Bastion }}
-ansible_ssh_common_args='-o StrictHostKeyChecking=no -o ProxyCommand="ssh -i ./id_rsa -o \'ForwardAgent yes\' -W %h:%p root@{{ .Bastion.PublicIP }}"'
+ansible_ssh_common_args='-vvv -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -vvv -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ForwardAgent yes\' -i ./id_rsa -W %h:%p root@{{ .Bastion.PublicIP }}"'
 {{- end }}
