@@ -1,4 +1,13 @@
 ---
+- name: Wait for nodes
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: Wait for system to become reachable over SSH
+    wait_for_connection:
+      delay: 10
+      timeout: 180
+  
 - name: Configure NAT for bastion host
   hosts: bastion
   gather_facts: false

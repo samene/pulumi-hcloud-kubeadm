@@ -165,7 +165,7 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 		return
 	}
 	bastionSetup, err := local.NewCommand(ctx, fmt.Sprintf("ansible-setup-nat-%s", clusterName), &local.CommandArgs{
-		Create: pulumi.String(fmt.Sprintf("echo \"Waiting 60s...\" && sleep 60 && ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini ./bastion.yaml", clusterName)),
+		Create: pulumi.String(fmt.Sprintf("ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini ./bastion.yaml", clusterName)),
 	}, pulumi.DependsOn([]pulumi.Resource{inv}), pulumi.Parent(pulumik8sCluster))
 	if err != nil {
 		return nil, err
