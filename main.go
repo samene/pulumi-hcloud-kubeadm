@@ -27,6 +27,7 @@ var inventoryTmpl []byte
 //go:embed variables.tmpl
 var variablesTmpl []byte
 
+// read the cluster topology
 func readTopology(filename string) *Topology {
 	topology := &Topology{}
 	topo, err := os.ReadFile(filename)
@@ -158,21 +159,20 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 			return fmt.Sprintf("mv /tmp/inventory-%s.ini ./inventory-%s.ini && mv /tmp/variables-%s.yaml ./variables-%s.yaml && echo \"done\"", clusterName, clusterName, clusterName, clusterName), nil
 		}).(pulumi.StringOutput),
 		AssetPaths: pulumi.ToStringArray([]string{"inventory-" + clusterName + ".ini"}),
-		Delete:     pulumi.StringPtr("rm -rf inventory-" + clusterName + ".ini & rm -rf variables-" + clusterName + ".yaml"),
+		Delete:     pulumi.String("rm -rf inventory-" + clusterName + ".ini & rm -rf variables-" + clusterName + ".yaml"),
 	}, pulumi.Parent(pulumik8sCluster))
 	if err != nil {
 		return
 	}
 	bastionSetup, err := local.NewCommand(ctx, fmt.Sprintf("ansible-setup-nat-%s", clusterName), &local.CommandArgs{
 		Create: pulumi.String(fmt.Sprintf("echo \"Waiting 60s...\" && sleep 60 && ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini ./bastion.yaml", clusterName)),
-		Delete: pulumi.StringPtr("rm -rf cluster-" + clusterName + ".kubeconfig"),
 	}, pulumi.DependsOn([]pulumi.Resource{inv}), pulumi.Parent(pulumik8sCluster))
 	if err != nil {
 		return nil, err
 	}
 	k8sAnsible, err := local.NewCommand(ctx, fmt.Sprintf("ansible-k8s-installer-%s", clusterName), &local.CommandArgs{
 		Create:     pulumi.String(fmt.Sprintf("ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini -e \"@variables-%s.yaml\" ./install.yaml", clusterName, clusterName)),
-		Delete:     pulumi.StringPtr("rm -rf cluster-" + clusterName + ".kubeconfig"),
+		Delete:     pulumi.String("rm -rf cluster-" + clusterName + ".kubeconfig"),
 		AssetPaths: pulumi.ToStringArray([]string{"cluster-" + clusterName + ".kubeconfig"}),
 	}, pulumi.DependsOn([]pulumi.Resource{bastionSetup}), pulumi.Parent(pulumik8sCluster))
 
