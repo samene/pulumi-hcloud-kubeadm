@@ -87,6 +87,7 @@
       state: present
       reload: yes
     ignore_errors: true
+    no_log: true
     become: true
     with_items:
     - {name: net.ipv4.ip_forward, value: 1}
@@ -339,6 +340,7 @@
       module: shell
       _raw_params: "sed -i 's/kubernetes/{{clustername}}/g' cluster-{{clustername}}.kubeconfig"
     ignore_errors: true
+    no_log: true
 
   - block:
 
