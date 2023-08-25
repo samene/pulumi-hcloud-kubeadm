@@ -1,6 +1,6 @@
 [bastion]
 {{- if .Bastion }}
-{{ .Bastion.PrivateIP }}
+{{ .Bastion.PublicIP }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'
 {{- end }}
 
 [loadbalancer]

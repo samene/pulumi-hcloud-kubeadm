@@ -1,4 +1,31 @@
 ---
+- name: Configure NAT for bastion host
+  hosts: bastion
+  become: true
+  tasks:
+  - name: Wait for system to become reachable over SSH
+    wait_for_connection:
+      delay: 10
+      timeout: 180
+  - block:      
+    - name: Install package
+      apt:
+        name: ifupdown
+        update_cache: yes
+    - name: Install package
+      apt:
+        name: netcat
+    when: ansible_os_family == 'Debian'
+  - block:
+    - name: Remove package
+      yum:
+        name: hc-utils
+        state: absent
+    - name: install package
+      yum:
+        name: nc
+    when: ansible_os_family == 'RedHat'  
+
 - name: Wait for nodes
   hosts: all
   gather_facts: false
@@ -10,7 +37,6 @@
   
 - name: Configure NAT for bastion host
   hosts: bastion
-  gather_facts: false
   become: true
   tasks:
   - name: Enable IP forwarding
@@ -26,43 +52,83 @@
         iface eth0 inet dhcp
             post-up echo 1 > /proc/sys/net/ipv4/ip_forward
             post-up iptables -t nat -A POSTROUTING -s '{{ network_cidr }}' -o eth0 -j MASQUERADE
+    when: ansible_os_family == 'Debian'
+  - name: Configure NAT
+    blockinfile:
+      path: /etc/NetworkManager/dispatcher.d/ifup-local
+      create: true
+      mode: 0755
+      block: |
+        #!/bin/sh
+        
+        /bin/echo 1 > /proc/sys/net/ipv4/ip_forward
+        /sbin/iptables -t nat -A POSTROUTING -s '{{ network_cidr }}' -o eth0 -j MASQUERADE
+    when: ansible_os_family == 'RedHat' 
 
 - name: Configure NAT
   hosts: '!bastion'
   become: true
-  gather_facts: false
   tasks:
   - block:
-    - lineinfile:
-        path: /etc/systemd/resolved.conf
-        regexp: '^DNS='
-        line: DNS=185.12.64.2 185.12.64.1
-      register: dns
-    - shell: "systemctl restart systemd-resolved.service"
-      when: dns.changed
-    - name: Get interface name
-      shell: "ip route list {{ network_cidr }} | rev | awk '{print $1}' | rev"
-      register: iface
+    - block:
+      - name: Get uuid
+        shell: nmcli -t -f UUID con show --active | head -n 1
+        register: uuid
+      - name: Configure DNS
+        shell: "nmcli con mod {{ uuid.stdout }} ipv4.dns \"185.12.64.2 185.12.64.1\""
+      - name: Restart NetworkManager
+        shell: service NetworkManager restart
+      - name: Configure NAT
+        blockinfile:
+          path: /etc/NetworkManager/dispatcher.d/ifup-local
+          create: true
+          mode: 0755
+          block: |
+            #!/bin/sh
+            /sbin/ip route add default via {{ gateway }}        
+      when: ansible_os_family == 'RedHat'
+
+    - block:
+      - name: Get interface name
+        shell: "ip route list {{ network_cidr }} | rev | awk '{print $1}' | rev"
+        register: iface
+        when: ansible_os_family == 'Debian'
+      - name: Configure DNS
+        lineinfile:
+          path: /etc/systemd/resolved.conf
+          regexp: '^DNS='
+          line: DNS=185.12.64.2 185.12.64.1
+        register: dns
+      - name: Restart service
+        shell: "systemctl restart systemd-resolved.service"
+        when: dns.changed
+      - name: Configure NAT
+        blockinfile:
+          path: /etc/network/interfaces
+          create: true
+          block: |
+            auto {{ iface.stdout }}
+            iface {{ iface.stdout }} inet dhcp
+                post-up ip route add default via {{ gateway }}        
+      when: ansible_os_family == 'Debian'
+
     - name: Add IP route
-      shell: "ip route list | grep 'default via {{ gateway }} dev {{ iface.stdout }}' || ip route add default via {{ gateway }}"
-    - name: Configure NAT
-      blockinfile:
-        path: /etc/network/interfaces
-        create: true
-        block: |
-          auto {{ iface.stdout }}
-          iface {{ iface.stdout }} inet dhcp
-              post-up ip route add default via {{ gateway }}
+      shell: "ip route add default via {{ gateway }} || true"
+
     when: nat | bool
 
 - name: Install package
   hosts: '!bastion'
   become: true
-  gather_facts: false
   tasks:
   - name: Install package
     apt:
       name: ifupdown
       update_cache: yes
       state: latest
-    become: true
+    when: ansible_os_family == 'Debian'
+  - name: Remove package
+    yum:
+      name: hc-utils
+      state: absent
+    when: ansible_os_family == 'RedHat'    

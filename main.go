@@ -366,6 +366,10 @@ func setupNATAndBastionHost(ctx *pulumi.Context, infraCfg *infrastructureConfig,
 		Datacenter: pulumi.String(infraCfg.dataCenter),
 		ServerType: pulumi.String(infraCfg.bastionFlavor),
 		SshKeys:    pulumi.StringArray{coreinfra.sshKey.ID()},
+		PublicNets: hcloud.ServerPublicNetArray{hcloud.ServerPublicNetArgs{
+			Ipv4Enabled: pulumi.Bool(true),
+			Ipv6Enabled: pulumi.Bool(false),
+		}},
 		Networks: hcloud.ServerNetworkTypeArray{
 			hcloud.ServerNetworkTypeArgs{
 				NetworkId: coreinfra.subnet.NetworkId,
