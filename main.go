@@ -91,13 +91,15 @@ func deploy(ctx *pulumi.Context) (err error) {
 	}
 
 	for cName, cluster := range topology.Clusters {
+		c := cluster
 		clusterName := cName
 		clusterIterator := cluster
 		pulumik8sCluster, err := NewK8sCluster(ctx, clusterName)
 		if err != nil {
 			return err
 		}
-		infra := NewClusterInfra(clusterName)
+		infra := NewClusterInfra(infraCfg, &c)
+		infra.inventory.ClusterName = clusterName
 		infra.core = coreInfra
 
 		for instanceIndex := 0; instanceIndex < cluster.ControlPlane.NodeCount; instanceIndex++ {
@@ -151,7 +153,7 @@ func deploy(ctx *pulumi.Context) (err error) {
 }
 
 func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sCluster *K8sCluster) (config *pulumi.MapOutput, err error) {
-	inv, err := local.NewCommand(ctx, fmt.Sprintf("gen-inventory-%s", clusterName), &local.CommandArgs{
+	_, err = local.NewCommand(ctx, fmt.Sprintf("gen-inventory-%s", clusterName), &local.CommandArgs{
 		Create: pulumi.All(infraWaitFor).ApplyT(func(notUsed []interface{}) (string, error) {
 			// add common bastio
 			*ictx.inventory.Bastion = *ictx.core.bastion
@@ -166,7 +168,7 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 	}
 	bastionSetup, err := local.NewCommand(ctx, fmt.Sprintf("ansible-setup-nat-%s", clusterName), &local.CommandArgs{
 		Create: pulumi.String(fmt.Sprintf("ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini ./bastion.yaml", clusterName)),
-	}, pulumi.DependsOn([]pulumi.Resource{inv}), pulumi.Parent(pulumik8sCluster))
+	}, pulumi.DependsOn([]pulumi.Resource{ictx.core.bastionSetup}), pulumi.Parent(pulumik8sCluster))
 	if err != nil {
 		return nil, err
 	}
@@ -390,6 +392,17 @@ func setupNATAndBastionHost(ctx *pulumi.Context, infraCfg *infrastructureConfig,
 			return make([]string, 0)
 		},
 	)
+
+	coreinfra.bastionSetup, err = local.NewCommand(ctx, "ansible-setup-bastion", &local.CommandArgs{
+		Create: pulumi.All(coreinfra.jumpServer.Networks.Index(pulumi.Int(0)).Ip(), coreinfra.jumpServer.Ipv4Address).ApplyT(
+			func(ips []interface{}) string {
+				return fmt.Sprintf("ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook --private-key ./id_rsa -u %s  -i \"%s,\" ./bastion-prep.yaml", infraCfg.sshUser, ips[1].(string))
+			}).(pulumi.StringOutput),
+	})
+	if err != nil {
+		return
+	}
+
 	infraWaitFor = append(infraWaitFor, bas)
 
 	bastionNet, err := hcloud.NewServerNetwork(ctx, "bastion-private-net", &hcloud.ServerNetworkArgs{
@@ -607,17 +620,18 @@ func genInventoryFile(ctx *pulumi.Context, clusterInventory Inventory) {
 
 }
 
-func NewClusterInfra(clusterName string) *infra {
+func NewClusterInfra(infracfg *infrastructureConfig, cluster *Cluster) *infra {
 	workerIps := make([]*Node, 0)
 	cpIps := make([]*Node, 0)
 
-	inv := &Inventory{Cni: "flannel",
-		K8sversion:  "1.23.17-00",
-		User:        "root",
-		WorkerIPs:   workerIps,
-		MasterIPs:   cpIps,
-		Bastion:     &Node{},
-		ClusterName: clusterName}
+	inv := &Inventory{Cni: cluster.Cni,
+		K8sversion:         cluster.KubernetesVersion,
+		User:               infracfg.sshUser,
+		WorkerIPs:          workerIps,
+		MasterIPs:          cpIps,
+		Bastion:            &Node{},
+		PrivateRegistry:    cluster.PrivateRegistry,
+		InsecureRegistries: cluster.InsecureRegistries}
 	i := &infra{inventory: inv}
 	return i
 }

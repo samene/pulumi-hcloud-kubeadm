@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/pulumi/pulumi-command/sdk/go/command/local"
 	"github.com/pulumi/pulumi-hcloud/sdk/go/hcloud"
 	tls "github.com/pulumi/pulumi-tls/sdk/v4/go/tls"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -31,6 +32,7 @@ type commonInfra struct {
 	jumpServerFirewall *hcloud.Firewall
 	jumpServer         *hcloud.Server
 	bastion            *Node
+	bastionSetup       *local.Command
 }
 
 type infra struct {

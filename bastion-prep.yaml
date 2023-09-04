@@ -1,0 +1,58 @@
+---
+- name: Configure NAT for bastion host
+  hosts: all
+  become: true
+  tasks:
+  - name: Wait for server to become reachable over SSH
+    wait_for_connection:
+      delay: 20
+      timeout: 180
+  - block:      
+    - name: Install system package (1/2)
+      apt:
+        name: ifupdown
+        update_cache: yes
+    - name: Install system package (2/2)
+      apt:
+        name: netcat
+      failed_when: false
+    when: ansible_os_family == 'Debian'
+  - block:
+    - name: Remove system package
+      yum:
+        name: hc-utils
+        state: absent
+    - name: Install system package
+      yum:
+        name: nc
+    when: ansible_os_family == 'RedHat'
+
+- name: Configure NAT for bastion host
+  hosts: all
+  become: true
+  tasks:
+  - name: Enable IP forwarding
+    shell: "cat /proc/sys/net/ipv4/ip_forward | grep -q 1 || echo 1 > /proc/sys/net/ipv4/ip_forward"
+  - name: Add NAT rule in iptables
+    shell: "iptables-save  | grep 'POSTROUTING -s 10.0.0.0/16' || iptables -t nat -A POSTROUTING -s '10.0.0.0/16' -o eth0 -j MASQUERADE"
+  - name: Configure NAT
+    blockinfile:
+      path: /etc/network/interfaces
+      create: true
+      block: |
+        auto eth0
+        iface eth0 inet dhcp
+            post-up echo 1 > /proc/sys/net/ipv4/ip_forward
+            post-up iptables -t nat -A POSTROUTING -s '10.0.0.0/16' -o eth0 -j MASQUERADE
+    when: ansible_os_family == 'Debian'
+  - name: Configure NAT
+    blockinfile:
+      path: /etc/NetworkManager/dispatcher.d/ifup-local
+      create: true
+      mode: 0755
+      block: |
+        #!/bin/sh
+        
+        /bin/echo 1 > /proc/sys/net/ipv4/ip_forward
+        /sbin/iptables -t nat -A POSTROUTING -s '10.0.0.0/16' -o eth0 -j MASQUERADE
+    when: ansible_os_family == 'RedHat' 

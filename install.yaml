@@ -3,20 +3,17 @@
   tags:
   - common
   any_errors_fatal: true
+  become: true  
   tasks:
   - block:
     - name: Disable SELinux (1/2)
       shell: setenforce 0
-      become: true
     - name: Disable SELinux (2/2)
       shell: sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
-      become: true
     - name: Disable firewall (1/2)
       shell: "systemctl stop firewalld || true"
-      become: true
     - name: Disable firewall (2/2)
       shell: "systemctl disable firewalld || true"
-      become: true
     - block:
       - name: Add repository
         yum_repository:
@@ -24,7 +21,6 @@
           description: "{{ item.description }}"
           baseurl: "{{ item.url }}"
           gpgcheck: false
-        become: true
         loop: "{{ packages }}"
         vars:
           packages:
@@ -38,7 +34,6 @@
           description: "{{ item.description }}"
           baseurl: "{{ item.url }}"
           gpgcheck: false
-        become: true
         loop: "{{ packages }}"
         vars:
           packages:
@@ -56,12 +51,12 @@
   gather_subset:
   - 'min'
   any_errors_fatal: true
+  become: true
   tasks:
   - name: Install kernel modules
     community.general.modprobe:
       name: "{{item}}"
       state: present
-    become: true
     with_items:
     - overlay
     - br_netfilter
@@ -69,7 +64,6 @@
     community.general.modprobe:
       name: "{{item}}"
       state: present
-    become: true
     with_items:
     - iptable_nat
     - iptable_raw
@@ -88,7 +82,6 @@
       reload: yes
     ignore_errors: true
     no_log: true
-    become: true
     with_items:
     - {name: net.ipv4.ip_forward, value: 1}
     - {name: net.bridge.bridge-nf-call-ip6tables, value: 1}
@@ -118,7 +111,6 @@
       package:
         name: "{{item}}"
         state: present
-      become: true
       with_items:
       - curl
       - apt-transport-https
@@ -131,7 +123,6 @@
       package:
         name: "{{item}}"
         state: present
-      become: true
       with_items:
       - curl
       - ca-certificates
@@ -142,7 +133,6 @@
       package:
         name: "{{item}}"
         state: present
-      become: true
       with_items:
       - iproute-tc
       when: ansible_distribution_major_version == '8'
@@ -151,20 +141,17 @@
         name: iscsid
         state: started
         enabled: yes
-      become: true
     when: ansible_os_family == 'RedHat'    
   - block:
     - name: Get apt key
       apt_key:
         url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
-      become: true
     - name: Add apt repository
       apt_repository:
         repo: "deb https://apt.kubernetes.io/ kubernetes-xenial main"
         state: present
         filename: kubernetes
         update_cache: true
-      become: true
     when: ansible_os_family == 'Debian'
   - block:
     - name: Add yum repository
@@ -179,28 +166,23 @@
         - kubelet
         - kubeadm
         - kubectl
-      become: true
     when: ansible_os_family == 'RedHat'
   - name: Install containerd
     package:
       name: containerd
       state: present
-    become: true
     register: install_containerd
   - name: Configure containerd (1/3)
     shell: "mkdir -p /etc/containerd && containerd config default | tee /etc/containerd/config.toml"
     args:
       creates: /etc/containerd/config.toml
-    become: true
   - name: Configure containerd (2/3)
     shell: "sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml"
-    become: true
   - name: Configure containerd (3/3)
     lineinfile:
       path: /etc/containerd/config.toml
       regexp: 'disabled_plugins'
       state: absent
-    become: true
   - block:
       - name: add insecure registry
         blockinfile:
@@ -215,7 +197,6 @@
 
         with_items:
         - "{{insecure_registries | default([]) }}"
-        become: true
       - name: add insecure registry
         blockinfile:
           path: /etc/containerd/config.toml
@@ -229,7 +210,6 @@
 
         with_items:
         - "{{insecure_registries | default([]) }}"
-        become: true
   
     when: insecure_registries | default([]) | length > 0
   - name: Restart containerd
@@ -238,38 +218,40 @@
       state: restarted
       daemon_reload: true
       enabled: true
-    become: true
     when: install_containerd.changed
   - block:
+    - name: Get latest version of kubernetes patch
+      shell: "apt-cache show kubelet | grep 'Version: {{ kubernetes_version }}' | head -n 1 | awk '{print $NF}'"
+      register: k8s_version
     - name: Install kubernetes packages
       apt:
         update_cache: yes
-        name: ['kubeadm={{ kubernetes_version }}','kubelet={{ kubernetes_version }}', 'kubectl={{ kubernetes_version }}']
-      become: true
+        name: ['kubeadm={{ k8s_version.stdout }}','kubelet={{ k8s_version.stdout }}', 'kubectl={{ k8s_version.stdout }}']
     when: ansible_os_family == 'Debian'
   - block:
+    - name: Get latest version of kubernetes patch
+      shell: "yum --showduplicates list kubeadm --disableexcludes=kubernetes | grep '{{ kubernetes_version }}' | tail -n 1 | awk '{print $2}'"
+      register: k8s_version    
     - name: Install kubernetes packages
       yum:
-        name: ['kubeadm-{{ kubernetes_version }}','kubelet-{{ kubernetes_version }}', 'kubectl-{{ kubernetes_version }}']
+        name: ['kubeadm-{{ k8s_version.stdout }}','kubelet-{{ k8s_version.stdout }}', 'kubectl-{{ k8s_version.stdout }}']
         disable_excludes: kubernetes
-      become: true
     when: ansible_os_family == 'RedHat'
   - name: Start kubelet
     systemd:
       name: kubelet
       state: started
       enabled: true
-    become: true
 
 - name: Control plane
   hosts: master[0]
   tags:
   - controlplane
   any_errors_fatal: true
+  become: true
   tasks:
   - shell: "kubeadm certs certificate-key"
     register: cert_key
-    become: true
   - set_fact:
       certificate_key: "{{ cert_key.stdout }}"
       cp_endpoint: "{{ hostvars[groups['master'][0]].public_ip}}"
@@ -283,38 +265,38 @@
     shell: "kubeadm init {{ extra_args }} --upload-certs --config /tmp/k8s-configuration.yml"
     args:
       creates: /etc/kubernetes/admin.conf
-    become: true
   - name: Get join command for control plane
     shell: "kubeadm token create --print-join-command --certificate-key {{ certificate_key }}"
-    become: true
     register: joincommand_cp
   - name: Get join command for workers
     shell: kubeadm token create --print-join-command
-    become: true
     register: joincommand_worker
   - name: Save join command - control plane
     local_action:
       module: copy
       dest: /tmp/join-command-{{clustername}}-cp
       content: "{{joincommand_cp.stdout}}"
+    become: false
   - name: Save join command - worker
     local_action:
       module: copy
       dest: /tmp/join-command-{{clustername}}-worker
       content: "{{joincommand_worker.stdout}}"
+    become: false
 
 - name: Control plane - HA
   hosts: master
   any_errors_fatal: true
   tags:
   - controlplane
+  become: true
   tasks:
   - name: Get join command
     set_fact:
       joincmd: "{{ lookup('file', '/tmp/join-command-{{clustername}}-cp') }}"
+    become: false
     run_once: true
   - name: Join cluster - HA control plane
-    become: true
     shell: "{{joincmd}}"
     args:
       creates: /etc/kubernetes/kubelet.conf
@@ -325,15 +307,22 @@
   - cni
   - controlplane
   any_errors_fatal: true
+  become: true
   tasks:
   - name: Move kubeconfig
     shell: "mkdir -p {{ansible_env.HOME}}/.kube && cp /etc/kubernetes/admin.conf {{ansible_env.HOME}}/.kube/config && chown {{ansible_user}}:{{ansible_user}} {{ansible_env.HOME}}/.kube/config"
     args:
       creates: "{{ansible_env.HOME}}/.kube/config"
-    become: true
 
-  - name: Untaint master if only 1 node cluster
-    shell: "kubectl taint node $(kubectl get nodes -o json | jq -r '.items[0].metadata.name') node-role.kubernetes.io/master:NoSchedule-"
+  - block:
+
+    - name: Untaint master if only 1 node cluster
+      shell: "kubectl taint node $(kubectl get nodes -o json | jq -r '.items[0].metadata.name') node-role.kubernetes.io/master:NoSchedule-"
+      failed_when: false
+    - name: Untaint master if only 1 node cluster
+      shell: "kubectl taint node $(kubectl get nodes -o json | jq -r '.items[0].metadata.name') node-role.kubernetes.io/control-plane:NoSchedule-"
+      failed_when: false
+
     when: "groups['worker']|length == 0" 
 
   - name: Fetch kubeconfig
@@ -341,12 +330,14 @@
       src: "{{ansible_env.HOME}}/.kube/config"
       dest: cluster-{{clustername}}.kubeconfig
       flat: true
+    become: false
 
   - name: Change cluster and context name
     local_action: 
       module: shell
       _raw_params: "sed -i 's/kubernetes/{{clustername}}/g' cluster-{{clustername}}.kubeconfig"
     ignore_errors: true
+    become: false
     no_log: true
 
   - block:
@@ -376,7 +367,6 @@
         args:
           chdir: /tmp
           creates: /usr/local/bin/cilium
-        become: true
       - name: Install Cilium CNI
         shell: cilium install --helm-set kubeProxyReplacement=strict,k8sServiceHost={{cp_endpoint}},k8sServicePort=6443
       when: ds.stdout|int|default(0) == 0
@@ -396,13 +386,14 @@
   tags:
   - worker
   any_errors_fatal: true
+  become: true
   tasks:
   - name: Get join command
     set_fact:
       joincmd: "{{ lookup('file', '/tmp/join-command-{{clustername}}-worker') }}"
     run_once: true
+    become: false
   - name: Join cluster
-    become: true
     shell: "{{joincmd}}"
     args:
       creates: /etc/kubernetes/kubelet.conf

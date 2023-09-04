@@ -58,13 +58,13 @@ Create a file called `topology.yaml` with following format
 ```
 clusters:
   central:
-    kubernetes_version: 1.23.17-00
+    kubernetes_version: 1.23     # the highest patch version will be selected automatically
     private_registry: my-docker-registry.com:5000/subpath
-    insecure_registries:     # list of docker registries to add to insecure registries
+    insecure_registries:         # list of docker registries to add to insecure registries
     - "10.90.84.113:5000"    
     load_balancer:
-      create: true           # create a load balancer node
-      port_mappings:         # target port mappings
+      create: true               # create a load balancer node
+      port_mappings:             # target port mappings
         https:
           source: 443
           target: 31390
@@ -72,22 +72,22 @@ clusters:
           source: 80
           target: 31394
     ntp:
-      primary: 10.17.0.10
-      secondary: 10.17.0.11
+      primary: time.windows.com
+      secondary: time.google.com
     control_plane:
-      node_count: 3   # 1 or 3 (if 3, one Load Balancer will be created)
+      node_count: 3              # 1 or 3 (if 3, one Load Balancer will be created)
     worker:
-      node_count: 4   # if 0, control plane will be untainted to schedule workloads
-    cni: flannel      # flannel or cilium
+      node_count: 4              # if 0, control plane will be untainted to schedule workloads
+    cni: flannel                 # flannel or cilium
   edge-1:
-    kubernetes_version: 1.23.17-00
+    kubernetes_version: 1.23
     private_registry: my-docker-registry.com:5000/subpath
     insecure_registries: []
     load_balancer:
       create: false
     ntp:
-      primary: 10.17.0.10
-      secondary: 10.17.0.11
+      primary: time.windows.com
+      secondary: time.google.com
     control_plane:
       node_count: 1
     worker:
