@@ -8,6 +8,11 @@
     wait_for_connection:
       delay: 20
       timeout: 180
+
+- name: Configure NAT for bastion host
+  hosts: all
+  become: true
+  tasks:
   - block:      
     - name: Install system package (1/2)
       apt:
