@@ -2,6 +2,7 @@
 - name: Configure NAT for bastion host
   hosts: all
   become: true
+  gather_facts: false
   tasks:
   - name: Wait for server to become reachable over SSH
     wait_for_connection:
