@@ -108,9 +108,9 @@
       replace: '# \1'
   - block:
     - name: Install pre-requisite packages
-      package:
+      apt:
         name: "{{item}}"
-        state: present
+        update_cache: yes
       with_items:
       - curl
       - apt-transport-https
@@ -120,9 +120,9 @@
     when: ansible_os_family == 'Debian'
   - block:
     - name: Install pre-requisite packages
-      package:
+      yum:
         name: "{{item}}"
-        state: present
+        update_cache: yes
       with_items:
       - curl
       - ca-certificates
@@ -130,7 +130,7 @@
       - gpg
       - jq
     - name: Install pre-requisite packages
-      package:
+      yum:
         name: "{{item}}"
         state: present
       with_items:
