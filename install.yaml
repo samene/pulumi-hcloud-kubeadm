@@ -340,13 +340,22 @@
     become: false
     no_log: true
 
+  - name: Copy manifests
+    copy:
+      src: "./files/{{item}}"
+      dest: "/tmp/{{item}}"
+    with_items:
+    - metrics-server.yaml
+    - kube-flannel.yml
+    - kube-flannel-rbac.yml
+
   - block:
 
     - name: Install Flannel CNI (1/2)
-      shell: "kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/k8s-old-manifests/kube-flannel-rbac.yml"
+      shell: "kubectl apply -f /tmp/kube-flannel-rbac.yml"
 
     - name: Install Flannel CNI (2/2)
-      shell: "kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/v0.21.5/Documentation/kube-flannel.yml"
+      shell: "kubectl apply -f /tmp/kube-flannel.yml"
 
     when: "cni == 'flannel'"
 
@@ -373,12 +382,7 @@
 
     when: "cni == 'cilium'"
 
-  - name: Install metrics server (1/2)
-    copy:
-      src: ./files/metrics-server.yaml
-      dest: /tmp/metrics-server.yaml
-
-  - name: Install metrics server (2/2)
+  - name: Install metrics server
     shell: kubectl apply -f /tmp/metrics-server.yaml
 
 - name: Workers
