@@ -13,6 +13,10 @@
   become: true
   tasks:
   - block:
+
+    - name: Add IP route
+      shell: "ip route add default via 10.0.0.1 || true"
+
     - block:
       - name: Get connection UUID
         shell: nmcli -t -f UUID con show --active | head -n 1
@@ -63,8 +67,5 @@
           update_cache: yes
           state: latest                    
       when: ansible_os_family == 'Debian'
-
-    - name: Add IP route
-      shell: "ip route add default via 10.0.0.1 || true"
 
     when: nat | bool
