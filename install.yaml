@@ -48,8 +48,6 @@
   hosts: '!bastion'
   tags:
   - k8s
-  gather_subset:
-  - 'min'
   any_errors_fatal: true
   become: true
   tasks:
