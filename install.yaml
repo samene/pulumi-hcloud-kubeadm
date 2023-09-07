@@ -109,32 +109,18 @@
   - block:
     - name: Install pre-requisite packages
       apt:
-        name: "{{item}}"
+        name: ['curl', 'apt-transport-https', 'ca-certificates', 'gpg', 'jq']
         update_cache: yes
-      with_items:
-      - curl
-      - apt-transport-https
-      - ca-certificates
-      - gpg
-      - jq
     when: ansible_os_family == 'Debian'
   - block:
     - name: Install pre-requisite packages
       yum:
-        name: "{{item}}"
+        name: ['curl','ca-certificates','iscsi-initiator-utils','gpg','jq']
         update_cache: yes
-      with_items:
-      - curl
-      - ca-certificates
-      - iscsi-initiator-utils
-      - gpg
-      - jq
     - name: Install pre-requisite packages
       yum:
-        name: "{{item}}"
+        name: ['iproute-tc']
         state: present
-      with_items:
-      - iproute-tc
       when: ansible_distribution_major_version == '8'
     - name: Enable iscsid
       systemd:
