@@ -167,13 +167,13 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 		return
 	}
 	bastionSetup, err := local.NewCommand(ctx, fmt.Sprintf("ansible-setup-nat-%s", clusterName), &local.CommandArgs{
-		Create: pulumi.String(fmt.Sprintf("ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini ./bastion.yaml", clusterName)),
+		Create: pulumi.String(fmt.Sprintf("ansible-playbook -i ./inventory-%s.ini ./bastion.yaml", clusterName)),
 	}, pulumi.DependsOn([]pulumi.Resource{ictx.core.bastionSetup}), pulumi.Parent(pulumik8sCluster))
 	if err != nil {
 		return nil, err
 	}
 	k8sAnsible, err := local.NewCommand(ctx, fmt.Sprintf("ansible-k8s-installer-%s", clusterName), &local.CommandArgs{
-		Create:     pulumi.String(fmt.Sprintf("ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ./inventory-%s.ini -e \"@variables-%s.yaml\" ./install.yaml", clusterName, clusterName)),
+		Create:     pulumi.String(fmt.Sprintf("ansible-playbook -i ./inventory-%s.ini -e \"@variables-%s.yaml\" ./install.yaml", clusterName, clusterName)),
 		Delete:     pulumi.String("rm -rf cluster-" + clusterName + ".kubeconfig"),
 		AssetPaths: pulumi.ToStringArray([]string{"cluster-" + clusterName + ".kubeconfig"}),
 	}, pulumi.DependsOn([]pulumi.Resource{bastionSetup}), pulumi.Parent(pulumik8sCluster))
@@ -396,7 +396,7 @@ func setupNATAndBastionHost(ctx *pulumi.Context, infraCfg *infrastructureConfig,
 	coreinfra.bastionSetup, err = local.NewCommand(ctx, "ansible-setup-bastion", &local.CommandArgs{
 		Create: pulumi.All(coreinfra.jumpServer.Networks.Index(pulumi.Int(0)).Ip(), coreinfra.jumpServer.Ipv4Address).ApplyT(
 			func(ips []interface{}) string {
-				return fmt.Sprintf("ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook --private-key ./id_rsa -u %s  -i \"%s,\" ./bastion-prep.yaml", infraCfg.sshUser, ips[1].(string))
+				return fmt.Sprintf("ansible-playbook --private-key ./id_rsa -u %s  -i \"%s,\" ./bastion-prep.yaml", infraCfg.sshUser, ips[1].(string))
 			}).(pulumi.StringOutput),
 	})
 	if err != nil {
