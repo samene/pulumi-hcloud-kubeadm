@@ -101,11 +101,11 @@ func deploy(ctx *pulumi.Context) (err error) {
 		infra := NewClusterInfra(infraCfg, &c)
 		infra.inventory.ClusterName = clusterName
 		infra.core = coreInfra
-
+		createLoadBal := (cluster.LoadBalancer.Create) || (cluster.ControlPlane.NodeCount+cluster.Worker.NodeCount > 1)
 		for instanceIndex := 0; instanceIndex < cluster.ControlPlane.NodeCount; instanceIndex++ {
 			// control plane nodes
 			masterWorker := cluster.ControlPlane.NodeCount+cluster.Worker.NodeCount <= 1
-			err = setupCtrlPlaneNodes(ctx, infraCfg, infra, instanceIndex, clusterName, masterWorker, pulumik8sCluster)
+			err = setupCtrlPlaneNodes(ctx, infraCfg, infra, instanceIndex, clusterName, masterWorker, createLoadBal, pulumik8sCluster)
 			if err != nil {
 				return err
 			}
@@ -117,7 +117,7 @@ func deploy(ctx *pulumi.Context) (err error) {
 				return err
 			}
 		}
-		if cluster.ControlPlane.NodeCount+cluster.Worker.NodeCount > 1 {
+		if createLoadBal {
 			// create loadbalancer
 			err = setupLoadBalancer(ctx, infraCfg, infra, clusterIterator, clusterName, pulumik8sCluster)
 			if err != nil {
@@ -320,7 +320,7 @@ func setupWorkerNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ictx 
 	return
 }
 
-func setupCtrlPlaneNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ictx *infra, index int, clusterName string, masterWorker bool, pulumik8sCluster *K8sCluster) (err error) {
+func setupCtrlPlaneNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ictx *infra, index int, clusterName string, masterWorker bool, createLoadBal bool, pulumik8sCluster *K8sCluster) (err error) {
 	if ictx.cpNodes == nil {
 		ictx.cpNodes = make([]*hcloud.Server, 0)
 	}
@@ -336,7 +336,7 @@ func setupCtrlPlaneNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ic
 		ServerType: pulumi.String(flavor),
 		SshKeys:    pulumi.StringArray{ictx.core.sshKey.ID()},
 		PublicNets: hcloud.ServerPublicNetArray{hcloud.ServerPublicNetArgs{
-			Ipv4Enabled: pulumi.Bool(masterWorker),
+			Ipv4Enabled: pulumi.Bool(!createLoadBal),
 			Ipv6Enabled: pulumi.Bool(false),
 		}},
 		Networks: hcloud.ServerNetworkTypeArray{
