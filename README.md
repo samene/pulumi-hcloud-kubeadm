@@ -7,7 +7,7 @@ A simple [Pulumi](https://www.pulumi.com/) project in Go to create Hetzner insta
 - Pulumi installed (latest version recommended) - [How-to](https://www.pulumi.com/docs/install/)
 - Ansible installed (latest version recommended)
 - Hetzner account and API key
-- Supported images - `Ubuntu 22.04`
+- Supported images - `Ubuntu 22.04` and `CentOS 7`
 
 ## How to Run
 
@@ -42,7 +42,7 @@ pulumi config set sshUser root                  # replace with ssh user name (us
 Set configuration for authentication to HCloud server. 
 
 ```
-pulumi config set hcloud:token XXXXXXXXXXXXXXXX          # replace with your API token (or set env variable)
+pulumi config set hcloud:token XXXXXXXXXXX      # replace with your API token (or set env variable)
 ```
 
 Set the path of the topology file (relative to current folder, or absolute path)
@@ -71,9 +71,6 @@ clusters:
         http:
           source: 80
           target: 31394
-    ntp:
-      primary: time.windows.com
-      secondary: time.google.com
     control_plane:
       node_count: 3              # 1 or 3 (if 3, one Load Balancer will be created)
     worker:
@@ -84,10 +81,11 @@ clusters:
     private_registry: my-docker-registry.com:5000/subpath
     insecure_registries: []
     load_balancer:
-      create: false
-    ntp:
-      primary: time.windows.com
-      secondary: time.google.com
+      create: true
+      port_mappings:
+        tls:
+          source: 15443
+          target: 31391
     control_plane:
       node_count: 1
     worker:
@@ -101,4 +99,8 @@ clusters:
 pulumi up
 ```
 
-The end result will be kubeconfig file(s) in your current directory for the newly created clusters.
+## Output
+
+```
+pulumi stack output clusters
+```

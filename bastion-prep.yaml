@@ -33,10 +33,6 @@
         name: nc
     when: ansible_os_family == 'RedHat'
 
-- name: Configure NAT for bastion host
-  hosts: all
-  become: true
-  tasks:
   - name: Enable IP forwarding
     shell: "cat /proc/sys/net/ipv4/ip_forward | grep -q 1 || echo 1 > /proc/sys/net/ipv4/ip_forward"
   - name: Add NAT rule in iptables
