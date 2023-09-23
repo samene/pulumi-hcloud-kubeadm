@@ -55,14 +55,14 @@
     community.general.modprobe:
       name: "{{item}}"
       state: present
-    with_items:
+    loop:
     - overlay
     - br_netfilter
   - name: Install kernel modules
     community.general.modprobe:
       name: "{{item}}"
       state: present
-    with_items:
+    loop:
     - iptable_nat
     - iptable_raw
     - iptable_mangle
@@ -79,8 +79,7 @@
       state: present
       reload: yes
     ignore_errors: true
-    no_log: true
-    with_items:
+    loop:
     - {name: net.ipv4.ip_forward, value: 1}
     - {name: net.bridge.bridge-nf-call-ip6tables, value: 1}
     - {name: net.bridge.bridge-nf-call-iptables, value: 1}
@@ -95,7 +94,8 @@
     - {name: net.ipv4.tcp_low_latency, value: 1}
     - {name: net.core.somaxconn, value: 40960}
     - {name: net.netfilter.nf_conntrack_tcp_be_liberal, value: 1}
-
+    loop_control:
+      label: "{{ item.name }}"
   - name: Disable swap (1/2)
     shell: |
       swapoff -a
@@ -105,12 +105,22 @@
       regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
       replace: '# \1'
   - block:
+    - name: Remove conflicting packages
+      apt:
+        name: ['docker.io','docker-doc','docker-compose','podman-docker','containerd','runc']
+        state: absent
+      when: cri == 'docker'
     - name: Install pre-requisite packages
       apt:
-        name: ['curl', 'apt-transport-https', 'ca-certificates', 'gpg', 'jq']
+        name: ['curl', 'apt-transport-https', 'ca-certificates', 'gpg', 'jq', 'xz-utils']
         update_cache: yes
     when: ansible_os_family == 'Debian'
   - block:
+    - name: Remove conflicting packages
+      yum:
+        name: ['docker','docker-client','docker-client-latest','docker-common','docker-latest','docker-latest-logrotate','docker-logrotate','docker-engine']
+        state: absent
+      when: cri == 'docker'
     - name: Install pre-requisite packages
       yum:
         name: ['curl','ca-certificates','iscsi-initiator-utils','gpg','jq']
@@ -127,18 +137,30 @@
         enabled: yes
     when: ansible_os_family == 'RedHat'    
   - block:
-    - name: Get apt key
+    - name: Get apt key for kubernetes repo
       apt_key:
         url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
-    - name: Add apt repository
+    - name: Add kubernetes repository
       apt_repository:
         repo: "deb https://apt.kubernetes.io/ kubernetes-xenial main"
         state: present
         filename: kubernetes
         update_cache: true
+    - block:
+      - name: Get apt key for docker-ce repo
+        apt_key:
+          url: https://download.docker.com/linux/ubuntu/gpg
+      - name: Add docker repository
+        apt_repository:
+          repo: "deb https://download.docker.com/linux/ubuntu jammy stable"
+          state: present
+          filename: docker
+          update_cache: true
+      when: cri == 'docker'
+
     when: ansible_os_family == 'Debian'
   - block:
-    - name: Add yum repository
+    - name: Add kubernetes yum repository
       yum_repository:
         name: kubernetes
         description: kubernetes repository
@@ -151,62 +173,97 @@
         - kubeadm
         - kubectl
     when: ansible_os_family == 'RedHat'
-  - name: Install containerd
-    package:
-      name: containerd
-      state: present
-    register: install_containerd
-  - name: Configure containerd (1/3)
-    shell: "mkdir -p /etc/containerd && containerd config default | tee /etc/containerd/config.toml"
-    args:
-      creates: /etc/containerd/config.toml
-  - name: Configure containerd (2/3)
-    shell: "sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml"
-  - name: Configure containerd (3/3)
-    lineinfile:
-      path: /etc/containerd/config.toml
-      regexp: 'disabled_plugins'
-      state: absent
   - block:
-      - name: add insecure registry
-        blockinfile:
-          path: /etc/containerd/config.toml
-          insertafter: '.*registry\.configs.*'
-          marker: "# insecure registry 1"
-          block: |
-            # insecure registry
+    - name: Install containerd
+      package:
+        name: containerd
+        state: present
+      register: install_containerd
+    - name: Configure containerd (1/3)
+      shell: "mkdir -p /etc/containerd && containerd config default | tee /etc/containerd/config.toml"
+      args:
+        creates: /etc/containerd/config.toml
+    - name: Configure containerd (2/3)
+      shell: "sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml"
+    - name: Configure containerd (3/3)
+      lineinfile:
+        path: /etc/containerd/config.toml
+        regexp: 'disabled_plugins'
+        state: absent
+    - block:
+        - name: add insecure registry
+          blockinfile:
+            path: /etc/containerd/config.toml
+            insertafter: '.*registry\.configs.*'
+            marker: "# insecure registry 1"
+            block: |
+              # insecure registry
 
-                    [plugins."io.containerd.grpc.v1.cri".registry.configs."{{item}}".tls]
-                      insecure_skip_verify = true
+                      [plugins."io.containerd.grpc.v1.cri".registry.configs."{{item}}".tls]
+                        insecure_skip_verify = true
 
-        with_items:
-        - "{{insecure_registries | default([]) }}"
-      - name: add insecure registry
-        blockinfile:
-          path: /etc/containerd/config.toml
-          insertafter: '.*registry\.mirrors.*'
-          marker: "# insecure registry 2"          
-          block: |
-            # insecure registry
+          loop: "{{ insecure_registries | default([]) | flatten(1) }}"
+        - name: add insecure registry
+          blockinfile:
+            path: /etc/containerd/config.toml
+            insertafter: '.*registry\.mirrors.*'
+            marker: "# insecure registry 2"
+            block: |
+              # insecure registry
 
-                    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{item}}"]
-                      endpoint = ["http://{{item}}"]  
+                      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."{{item}}"]
+                        endpoint = ["http://{{item}}"]
 
-        with_items:
-        - "{{insecure_registries | default([]) }}"
-  
-    when: insecure_registries | default([]) | length > 0
-  - name: Restart containerd
-    systemd: 
-      name: containerd
-      state: restarted
-      daemon_reload: true
-      enabled: true
-    when: install_containerd.changed
+          loop: "{{ insecure_registries | default([]) | flatten(1) }}"
+      when: insecure_registries | default([]) | length > 0
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+        daemon_reload: true
+        enabled: true
+      when: install_containerd.changed
+    when: cri =='containerd'
+
+  - block:
+    - name: Install docker
+      package:
+        name: ['docker-ce','docker-ce-cli','containerd.io','docker-buildx-plugin','docker-compose-plugin']
+      register: install_docker
+    - name: Configure docker
+      lineinfile:
+        path: /usr/lib/systemd/system/docker.service
+        regexp: '^ExecStart='
+        line: ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock --exec-opt native.cgroupdriver=systemd
+    - name: add insecure registry
+      template: src=./templates/daemon.json.j2 dest=/etc/docker/daemon.json
+      when: insecure_registries | default([]) | length > 0
+    - name: Restart docker
+      systemd:
+        name: docker
+        state: restarted
+        daemon_reload: true
+        enabled: true
+      when: install_docker.changed
+    when: cri == 'docker'
+
   - block:
     - name: Get latest version of kubernetes patch
       shell: "apt-cache show kubelet | grep 'Version: {{ kubernetes_version }}' | head -n 1 | awk '{print $NF}'"
       register: k8s_version
+    - block:
+      - name: Install cri-dockerd
+        apt:
+          deb: https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.4/cri-dockerd_0.3.4.3-0.ubuntu-jammy_amd64.deb
+        register: cri_docker
+      - name: Restart cri-docker
+        systemd:
+          name: cri-docker
+          state: restarted
+          daemon_reload: true
+          enabled: true
+        when: cri_docker.changed
+      when: "cri == 'docker' and kubernetes_version is version('1.24', '>=')"
     - name: Install kubernetes packages
       apt:
         update_cache: yes
@@ -215,7 +272,26 @@
   - block:
     - name: Get latest version of kubernetes patch
       shell: "yum --showduplicates list kubeadm --disableexcludes=kubernetes | grep '{{ kubernetes_version }}' | tail -n 1 | awk '{print $2}'"
-      register: k8s_version    
+      register: k8s_version
+    - block:
+      - name: Install cri-dockerd
+        yum:
+          name: https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.4/cri-dockerd-0.3.4-3.el7.x86_64.rpm
+        when: ansible_distribution_major_version == '7'
+        register: cri_docker_7
+      - name: Install cri-dockerd
+        yum:
+          name: https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.4/cri-dockerd-0.3.4-3.el8.x86_64.rpm
+        when: ansible_distribution_major_version == '8'
+        register: cri_docker_8
+      - name: Restart cri-docker
+        systemd:
+          name: cri-docker
+          state: restarted
+          daemon_reload: true
+          enabled: true
+        when: (cri_docker_7 is defined and cri_docker_7.changed) or (cri_docker_8 is defined and cri_docker_8.changed)
+      when: "cri == 'docker' and kubernetes_version is version('1.24', '>=')"
     - name: Install kubernetes packages
       yum:
         name: ['kubeadm-{{ k8s_version.stdout }}','kubelet-{{ k8s_version.stdout }}', 'kubectl-{{ k8s_version.stdout }}']
@@ -242,10 +318,8 @@
       cp_public_endpoint: "{{ hostvars[groups['master'][0]].public_ip}}"
   - set_fact:
       extra_args: "{% if cni == 'cilium' %}--skip-phases=addon/kube-proxy{% endif %}"
-
   - name: Create cluster configuration
     template: src=./templates/k8s-configuration.yml.j2 dest=/tmp/k8s-configuration.yml
-
   - name: Init
     shell: "kubeadm init {{ extra_args }} --upload-certs --config /tmp/k8s-configuration.yml"
     args:
@@ -276,9 +350,11 @@
   - controlplane
   become: true
   tasks:
+  - set_fact:
+      extra_args: "{% if kubernetes_version is version('1.24', '>=') and cri == 'docker' %}--cri-socket=unix:///var/run/cri-dockerd.sock{% endif %}"  
   - name: Get join command
     set_fact:
-      joincmd: "{{ lookup('file', '/tmp/join-command-{{clustername}}-cp') }}"
+      joincmd: "{{ lookup('file', '/tmp/join-command-{{clustername}}-cp') }} {{ extra_args }}"
     become: false
     run_once: true
   - name: Join cluster - HA control plane
@@ -329,7 +405,7 @@
     copy:
       src: "./files/{{item}}"
       dest: "/tmp/{{item}}"
-    with_items:
+    loop:
     - metrics-server.yaml
     - kube-flannel.yml
     - kube-flannel-rbac.yml
@@ -351,7 +427,7 @@
       register: ds
     - block:
       - set_fact:
-          cp_endpoint: "{% if groups['loadbalancer']|length > 0 %}{{hostvars[groups['loadbalancer'][0]].public_ip}}{% else %}{{hostvars[groups['master'][0]].ansible_default_ipv4.address}}{% endif %}"
+          cp_endpoint: "{% if groups['master']|length > 1 %}{{ hostvars[groups['master'][0]].public_ip}}{% else %}{{ hostvars[groups['master'][0]].private_ip}}{% endif %}"
       - name: Download Cilium CNI
         get_url:
           url: "https://github.com/cilium/cilium-cli/releases/download/v0.14.6/cilium-linux-amd64.tar.gz"
@@ -377,12 +453,14 @@
   any_errors_fatal: true
   become: true
   tasks:
+  - set_fact:
+      extra_args: "{% if kubernetes_version is version('1.24', '>=') and cri == 'docker' %}--cri-socket=unix:///var/run/cri-dockerd.sock{% endif %}"
   - name: Get join command
     set_fact:
       joincmd: "{{ lookup('file', '/tmp/join-command-{{clustername}}-worker') }}"
     run_once: true
     become: false
   - name: Join cluster
-    shell: "{{joincmd}}"
+    shell: "{{joincmd}} {{extra_args}}"
     args:
       creates: /etc/kubernetes/kubelet.conf

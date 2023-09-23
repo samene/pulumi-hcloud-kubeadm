@@ -58,8 +58,10 @@ Create a file called `topology.yaml` with following format
 ```
 clusters:
   central:
+    cri: containerd              # containerd or docker (defaults to containerd)
+    cni: flannel                 # flannel or cilium
     kubernetes_version: 1.23     # the highest patch version will be selected automatically
-    private_registry: my-docker-registry.com:5000/subpath
+    private_registry: my-docker-registry.com:5000
     insecure_registries:         # list of docker registries to add to insecure registries
     - "10.90.84.113:5000"    
     load_balancer:
@@ -75,10 +77,11 @@ clusters:
       node_count: 3              # 1 or 3 (if 3, one Load Balancer will be created)
     worker:
       node_count: 4              # if 0, control plane will be untainted to schedule workloads
-    cni: flannel                 # flannel or cilium
   edge-1:
+    cri: docker
+    cni: flannel
     kubernetes_version: 1.23
-    private_registry: my-docker-registry.com:5000/subpath
+    private_registry: my-docker-registry.com:5000
     insecure_registries: []
     load_balancer:
       create: true
@@ -90,7 +93,6 @@ clusters:
       node_count: 1
     worker:
       node_count: 0
-    cni: flannel
 ```
 
 ### Run

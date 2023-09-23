@@ -52,6 +52,7 @@ type Inventory struct {
 	MasterIPs          []*Node
 	WorkerIPs          []*Node
 	Cni                string
+	Cri                string
 	K8sversion         string
 	PrivateRegistry    string
 	InsecureRegistries []string
@@ -74,6 +75,7 @@ type LoadBalancerDef struct {
 }
 
 type Cluster struct {
+	Cri                string          `yaml:"cri"`
 	KubernetesVersion  string          `yaml:"kubernetes_version"`
 	PrivateRegistry    string          `yaml:"private_registry,omitempty"`
 	InsecureRegistries []string        `yaml:"insecure_registries,omitempty"`

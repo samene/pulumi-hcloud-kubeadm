@@ -41,6 +41,7 @@ func readTopology(filename string) *Topology {
 	return topology
 }
 
+// create a new component resource
 func NewK8sCluster(ctx *pulumi.Context, name string, opts ...pulumi.ResourceOption) (*K8sCluster, error) {
 	k8sCluster := &K8sCluster{}
 	err := ctx.RegisterComponentResource("pkg:k8s:K8sCluster", name, k8sCluster, opts...)
@@ -50,6 +51,7 @@ func NewK8sCluster(ctx *pulumi.Context, name string, opts ...pulumi.ResourceOpti
 	return k8sCluster, nil
 }
 
+// read pulumi configuration
 func readConfig(ctx *pulumi.Context) (*infrastructureConfig, *Topology) {
 	conf := config.New(ctx, "")
 	infraCfg := &infrastructureConfig{}
@@ -74,7 +76,7 @@ func deploy(ctx *pulumi.Context) (err error) {
 	infraCfg, topology := readConfig(ctx)
 	clusterConfigs := make([]interface{}, 0)
 	coreInfra := &commonInfra{}
-	// private key
+	// generate a key pair
 	err = setupKeys(ctx, coreInfra)
 	if err != nil {
 		return
@@ -101,6 +103,7 @@ func deploy(ctx *pulumi.Context) (err error) {
 		infra := NewClusterInfra(infraCfg, &c)
 		infra.inventory.ClusterName = clusterName
 		infra.core = coreInfra
+		// create load balancer condition
 		createLoadBal := (cluster.LoadBalancer.Create) || (cluster.ControlPlane.NodeCount+cluster.Worker.NodeCount > 1)
 		for instanceIndex := 0; instanceIndex < cluster.ControlPlane.NodeCount; instanceIndex++ {
 			// control plane nodes
@@ -427,13 +430,22 @@ func setupKeys(ctx *pulumi.Context, ictx *commonInfra) (err error) {
 	if err != nil {
 		return
 	}
-	ictx.privateKey.PrivateKeyOpenssh.ApplyT(func(privateKey string) string {
-		os.WriteFile("./id_rsa", []byte(privateKey), 0600)
-		return privateKey
+	pkey, err := local.NewCommand(ctx, "gen-privatekey", &local.CommandArgs{
+		Create: ictx.privateKey.PrivateKeyOpenssh.ApplyT(func(privateKey string) string {
+			er := os.WriteFile("./id_rsa", []byte(privateKey), 0600)
+			if er != nil {
+				return "false"
+			}
+			return "echo \"./id_rsa created\""
+		}).(pulumi.StringInput),
+		Delete: pulumi.String("rm -rf ./id_rsa"),
 	})
+	if err != nil {
+		return
+	}
 	ictx.sshKey, err = hcloud.NewSshKey(ctx, "pulumi-hcloud-kubeadm", &hcloud.SshKeyArgs{
 		PublicKey: ictx.privateKey.PublicKeyOpenssh,
-	})
+	}, pulumi.DependsOn([]pulumi.Resource{pkey}))
 
 	ictx.sshKey.ToSshKeyOutput()
 	return
@@ -625,6 +637,7 @@ func NewClusterInfra(infracfg *infrastructureConfig, cluster *Cluster) *infra {
 	cpIps := make([]*Node, 0)
 
 	inv := &Inventory{Cni: cluster.Cni,
+		Cri:                cluster.Cri,
 		K8sversion:         cluster.KubernetesVersion,
 		User:               infracfg.sshUser,
 		WorkerIPs:          workerIps,
