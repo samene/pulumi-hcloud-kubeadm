@@ -1,6 +1,6 @@
 # pulumi-hcloud-kubeadm
 
-A simple [Pulumi](https://www.pulumi.com/) project in Go to create Hetzner instances and install a kubernetes cluster on them using kubeadm
+A [Pulumi](https://www.pulumi.com/) project in Go to create Hetzner instances and install a kubernetes cluster on them using kubeadm
 
 ## Pre-requisites
 - Go installed (min 1.18) - [How-to](https://go.dev/doc/install)
@@ -14,7 +14,7 @@ A simple [Pulumi](https://www.pulumi.com/) project in Go to create Hetzner insta
 ### Clone Repository
 
 ```
-git clone git@gitlab.com:samene/pulumi-hcloud-kubeadm.git
+git clone https://github.com/samene/pulumi-hcloud-kubeadm.git
 cd pulumi-hcloud-kubeadm
 ``````
 
