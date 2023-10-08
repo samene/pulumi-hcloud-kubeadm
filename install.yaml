@@ -277,11 +277,13 @@
       - name: Install cri-dockerd
         yum:
           name: https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.4/cri-dockerd-0.3.4-3.el7.x86_64.rpm
+          disable_gpg_check: true
         when: ansible_distribution_major_version == '7'
         register: cri_docker_7
       - name: Install cri-dockerd
         yum:
           name: https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.4/cri-dockerd-0.3.4-3.el8.x86_64.rpm
+          disable_gpg_check: true
         when: ansible_distribution_major_version == '8'
         register: cri_docker_8
       - name: Restart cri-docker

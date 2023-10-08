@@ -18,6 +18,11 @@
       shell: "ip route add default via 10.0.0.1 || true"
 
     - block:
+      - name: Get interface name
+        shell: ip route list default | head -n 1 | rev | awk '{print $1}' | rev
+        register: iface
+      - name: Connect device
+        shell: nmcli device connect {{ iface.stdout }}
       - name: Get connection UUID
         shell: nmcli -t -f UUID con show --active | head -n 1
         register: uuid
@@ -43,7 +48,6 @@
       - name: Get interface name
         shell: "ip route list 10.0.0.0/16 | rev | awk '{print $1}' | rev"
         register: iface
-        when: ansible_os_family == 'Debian'
       - name: Configure DNS
         lineinfile:
           path: /etc/systemd/resolved.conf

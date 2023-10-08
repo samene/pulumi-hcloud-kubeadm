@@ -7,7 +7,7 @@ A simple [Pulumi](https://www.pulumi.com/) project in Go to create Hetzner insta
 - Pulumi installed (latest version recommended) - [How-to](https://www.pulumi.com/docs/install/)
 - Ansible installed (latest version recommended)
 - Hetzner account and API key
-- Supported images - `Ubuntu 22.04` and `CentOS 7`
+- Supported images - `Ubuntu 22.04`, `CentOS 7` and `CentOS 8 Stream`
 
 ## How to Run
 
@@ -31,7 +31,7 @@ Set configuration for compute and networking
 ```
 pulumi config set dataCenter ash-dc1            # replace with your desired datacenter
 pulumi config set networkZone us-east           # replace with your desired hcloud network zone
-pulumi config set image ubuntu-22.04            # replace with your desired os image (ubuntu-22.04 or centos-7)
+pulumi config set image ubuntu-22.04            # replace with your desired os image (ubuntu-22.04 or centos-7 or centos-8-stream)
 pulumi config set bastionFlavor cpx11           # replace with your desired flavor for bastion/NAT node
 pulumi config set masterFlavor cpx31            # replace with your desired flavor for clontrol plane nodes
 pulumi config set workerFlavor cpx41            # replace with your your desired flavor for worker nodes
