@@ -176,9 +176,10 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 		return nil, err
 	}
 	k8sAnsible, err := local.NewCommand(ctx, fmt.Sprintf("ansible-k8s-installer-%s", clusterName), &local.CommandArgs{
-		Create:     pulumi.String(fmt.Sprintf("ansible-playbook -i ./inventory-%s.ini -e \"@variables-%s.yaml\" ./install.yaml", clusterName, clusterName)),
-		Delete:     pulumi.String("rm -rf cluster-" + clusterName + ".kubeconfig"),
-		AssetPaths: pulumi.ToStringArray([]string{"cluster-" + clusterName + ".kubeconfig"}),
+		Create: pulumi.String(fmt.Sprintf("ansible-playbook -i ./inventory-%s.ini -e \"@variables-%s.yaml\" ./install.yaml", clusterName, clusterName)),
+		Delete: pulumi.String("rm -rf cluster-" + clusterName + ".kubeconfig"),
+		AssetPaths: pulumi.ToStringArray([]string{"cluster-" + clusterName + ".kubeconfig",
+			"inventory-" + clusterName + ".ini"}),
 	}, pulumi.DependsOn([]pulumi.Resource{bastionSetup}), pulumi.Parent(pulumik8sCluster))
 
 	if err != nil {
@@ -190,6 +191,14 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 		endPointConfig := make(map[string]interface{})
 		var kubeConfig string
 		kc, err := os.ReadFile(kubeconfigPaths[0])
+		if err != nil {
+			return nil, nil
+		}
+		inv, err := os.ReadFile(kubeconfigPaths[1])
+		if err != nil {
+			return nil, nil
+		}
+		privateKey, err := os.ReadFile("./id_rsa")
 		if err != nil {
 			return nil, nil
 		}
@@ -211,6 +220,8 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 		}
 		cConfig["endpoints"] = endPointConfig
 		cConfig["kubeconfig"] = kubeConfig
+		cConfig["inventory"] = string(inv)
+		cConfig["privateKey"] = string(privateKey)
 		ret[clusterName] = cConfig
 		return ret, nil
 	}).(pulumi.MapOutput)
@@ -295,10 +306,11 @@ func setupWorkerNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ictx 
 		ictx.workerNodes = make([]*hcloud.Server, 0)
 	}
 	workerNode, err := hcloud.NewServer(ctx, fmt.Sprintf("worker-%s-%d", clusterName, index), &hcloud.ServerArgs{
-		Image:      pulumi.String(infraCfg.image),
-		Datacenter: pulumi.String(infraCfg.dataCenter),
-		ServerType: pulumi.String(infraCfg.workerFlavor),
-		SshKeys:    pulumi.StringArray{ictx.core.sshKey.ID()},
+		Image:                 pulumi.String(infraCfg.image),
+		Datacenter:            pulumi.String(infraCfg.dataCenter),
+		ServerType:            pulumi.String(infraCfg.workerFlavor),
+		SshKeys:               pulumi.StringArray{ictx.core.sshKey.ID()},
+		AllowDeprecatedImages: pulumi.Bool(true),
 		PublicNets: hcloud.ServerPublicNetArray{hcloud.ServerPublicNetArgs{
 			Ipv4Enabled: pulumi.Bool(false),
 			Ipv6Enabled: pulumi.Bool(false),
@@ -334,10 +346,11 @@ func setupCtrlPlaneNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ic
 		flavor = infraCfg.masterFlavor
 	}
 	cpNode, err := hcloud.NewServer(ctx, fmt.Sprintf("control-plane-%s-%d", clusterName, index), &hcloud.ServerArgs{
-		Image:      pulumi.String(infraCfg.image),
-		Datacenter: pulumi.String(infraCfg.dataCenter),
-		ServerType: pulumi.String(flavor),
-		SshKeys:    pulumi.StringArray{ictx.core.sshKey.ID()},
+		Image:                 pulumi.String(infraCfg.image),
+		Datacenter:            pulumi.String(infraCfg.dataCenter),
+		ServerType:            pulumi.String(flavor),
+		SshKeys:               pulumi.StringArray{ictx.core.sshKey.ID()},
+		AllowDeprecatedImages: pulumi.Bool(true),
 		PublicNets: hcloud.ServerPublicNetArray{hcloud.ServerPublicNetArgs{
 			Ipv4Enabled: pulumi.Bool(!createLoadBal),
 			Ipv6Enabled: pulumi.Bool(false),
@@ -367,10 +380,11 @@ func setupCtrlPlaneNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ic
 
 func setupNATAndBastionHost(ctx *pulumi.Context, infraCfg *infrastructureConfig, coreinfra *commonInfra) (err error) {
 	coreinfra.jumpServer, err = hcloud.NewServer(ctx, "jump-server", &hcloud.ServerArgs{
-		Image:      pulumi.String(infraCfg.image),
-		Datacenter: pulumi.String(infraCfg.dataCenter),
-		ServerType: pulumi.String(infraCfg.bastionFlavor),
-		SshKeys:    pulumi.StringArray{coreinfra.sshKey.ID()},
+		Image:                 pulumi.String(infraCfg.image),
+		Datacenter:            pulumi.String(infraCfg.dataCenter),
+		ServerType:            pulumi.String(infraCfg.bastionFlavor),
+		SshKeys:               pulumi.StringArray{coreinfra.sshKey.ID()},
+		AllowDeprecatedImages: pulumi.Bool(true),
 		PublicNets: hcloud.ServerPublicNetArray{hcloud.ServerPublicNetArgs{
 			Ipv4Enabled: pulumi.Bool(true),
 			Ipv6Enabled: pulumi.Bool(false),
