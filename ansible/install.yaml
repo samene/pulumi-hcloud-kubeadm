@@ -435,8 +435,10 @@
         args:
           chdir: /tmp
           creates: /usr/local/bin/cilium
+      - name: Generate configuration
+        template: src=./templates/cilium-values.yml.j2 dest=/tmp/cilium-values.yml
       - name: Install Cilium CNI
-        shell: cilium install --version v1.14.5 --helm-set kubeProxyReplacement=true,k8sServiceHost={{cp_endpoint}},k8sServicePort=6443
+        shell: "cilium install --version v1.14.5 --helm-values /tmp/cilium-values.yml"
       when: ds.stdout|int|default(0) == 0
 
     when: "cni == 'cilium'"
