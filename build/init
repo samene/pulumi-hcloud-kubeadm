@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# if stack is already selected - do nothing
+# if stack is not selected, select production
+# if stack is not created, initialize it
+STACKNAME=${1:-'production'}
+
+if ! pulumi stack --show-name --non-interactive 2>/dev/null && ! pulumi stack select $STACKNAME 2>/dev/null; then
+
+    pulumi stack init $STACKNAME
+
+    # set some defaults
+    pulumi config set --path dataCenter "fsn1-dc14" --non-interactive
+    pulumi config set --path networkZone "eu-central" --non-interactive
+    pulumi config set --path image "ubuntu-22.04" --non-interactive
+    pulumi config set --path bastionFlavor "cpx11" --non-interactive
+    pulumi config set --path masterFlavor "cpx31" --non-interactive
+    pulumi config set --path workerFlavor "cpx41" --non-interactive
+    pulumi config set --path lbType "lb11" --non-interactive
+    pulumi config set --path sshUser "root" --non-interactive
+    pulumi config set --path topologyFile "./vars/topology.yaml" --non-interactive
+
+fi
+
+if [ -z "$HCLOUD_TOKEN" ]; then
+    echo "CRIT: HCLOUD_TOKEN env variable is not set!!"
+fi
+
+if [ ! -f "/home/pulumi-hcloud-kubeadm/vars/topology.yaml" ]; then
+    cp /home/pulumi-hcloud-kubeadm/topology.yaml.example /home/pulumi-hcloud-kubeadm/vars/topology.yaml
+fi
+
+
+cd /home/pulumi-hcloud-kubeadm
+/bin/bash

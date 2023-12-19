@@ -391,14 +391,14 @@
   - name: Fetch kubeconfig
     fetch:
       src: "{{ansible_env.HOME}}/.kube/config"
-      dest: cluster-{{clustername}}.kubeconfig
+      dest: ../vars/cluster-{{clustername}}.kubeconfig
       flat: true
     become: false
 
   - name: Change cluster and context name
     local_action: 
       module: shell
-      _raw_params: "sed -i 's/kubernetes/{{clustername}}/g' cluster-{{clustername}}.kubeconfig"
+      _raw_params: "sed -i 's/kubernetes/{{clustername}}/g' ../vars/cluster-{{clustername}}.kubeconfig"
     ignore_errors: true
     become: false
     no_log: true
@@ -436,7 +436,7 @@
           chdir: /tmp
           creates: /usr/local/bin/cilium
       - name: Install Cilium CNI
-        shell: cilium install --helm-set kubeProxyReplacement=strict,k8sServiceHost={{cp_endpoint}},k8sServicePort=6443
+        shell: cilium install --version v1.14.5 --helm-set kubeProxyReplacement=true,k8sServiceHost={{cp_endpoint}},k8sServicePort=6443
       when: ds.stdout|int|default(0) == 0
 
     when: "cni == 'cilium'"

@@ -161,25 +161,25 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 			// add common bastio
 			*ictx.inventory.Bastion = *ictx.core.bastion
 			genInventoryFile(ctx, *ictx.inventory)
-			return fmt.Sprintf("mv /tmp/inventory-%s.ini ./inventory-%s.ini && mv /tmp/variables-%s.yaml ./variables-%s.yaml && echo \"done\"", clusterName, clusterName, clusterName, clusterName), nil
+			return fmt.Sprintf("mv /tmp/inventory-%s.ini ./vars/inventory-%s.ini && mv /tmp/variables-%s.yaml ./vars/variables-%s.yaml && echo \"done\"", clusterName, clusterName, clusterName, clusterName), nil
 		}).(pulumi.StringOutput),
-		AssetPaths: pulumi.ToStringArray([]string{"inventory-" + clusterName + ".ini"}),
-		Delete:     pulumi.String("rm -rf inventory-" + clusterName + ".ini & rm -rf variables-" + clusterName + ".yaml"),
+		AssetPaths: pulumi.ToStringArray([]string{"./vars/inventory-" + clusterName + ".ini"}),
+		Delete:     pulumi.String("rm -rf ./vars/inventory-" + clusterName + ".ini & rm -rf ./vars/variables-" + clusterName + ".yaml"),
 	}, pulumi.Parent(pulumik8sCluster))
 	if err != nil {
 		return
 	}
 	bastionSetup, err := local.NewCommand(ctx, fmt.Sprintf("ansible-setup-nat-%s", clusterName), &local.CommandArgs{
-		Create: pulumi.String(fmt.Sprintf("ansible-playbook -i ./inventory-%s.ini ./bastion.yaml", clusterName)),
+		Create: pulumi.String(fmt.Sprintf("ansible-playbook -i ./vars/inventory-%s.ini ./.ansible/bastion.yaml", clusterName)),
 	}, pulumi.DependsOn([]pulumi.Resource{ictx.core.bastionSetup}), pulumi.Parent(pulumik8sCluster))
 	if err != nil {
 		return nil, err
 	}
 	k8sAnsible, err := local.NewCommand(ctx, fmt.Sprintf("ansible-k8s-installer-%s", clusterName), &local.CommandArgs{
-		Create: pulumi.String(fmt.Sprintf("ansible-playbook -i ./inventory-%s.ini -e \"@variables-%s.yaml\" ./install.yaml", clusterName, clusterName)),
-		Delete: pulumi.String("rm -rf cluster-" + clusterName + ".kubeconfig"),
-		AssetPaths: pulumi.ToStringArray([]string{"cluster-" + clusterName + ".kubeconfig",
-			"inventory-" + clusterName + ".ini"}),
+		Create: pulumi.String(fmt.Sprintf("ansible-playbook -i ./vars/inventory-%s.ini -e \"@./vars/variables-%s.yaml\" ./.ansible/install.yaml", clusterName, clusterName)),
+		Delete: pulumi.String("rm -rf ./vars/cluster-" + clusterName + ".kubeconfig"),
+		AssetPaths: pulumi.ToStringArray([]string{"./vars/cluster-" + clusterName + ".kubeconfig",
+			"./vars/inventory-" + clusterName + ".ini"}),
 	}, pulumi.DependsOn([]pulumi.Resource{bastionSetup}), pulumi.Parent(pulumik8sCluster))
 
 	if err != nil {
@@ -198,7 +198,7 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 		if err != nil {
 			return nil, nil
 		}
-		privateKey, err := os.ReadFile("./id_rsa")
+		privateKey, err := os.ReadFile("./vars/id_rsa")
 		if err != nil {
 			return nil, nil
 		}
@@ -413,7 +413,7 @@ func setupNATAndBastionHost(ctx *pulumi.Context, infraCfg *infrastructureConfig,
 	coreinfra.bastionSetup, err = local.NewCommand(ctx, "ansible-setup-bastion", &local.CommandArgs{
 		Create: pulumi.All(coreinfra.jumpServer.Networks.Index(pulumi.Int(0)).Ip(), coreinfra.jumpServer.Ipv4Address).ApplyT(
 			func(ips []interface{}) string {
-				return fmt.Sprintf("ansible-playbook --private-key ./id_rsa -u %s  -i \"%s,\" ./bastion-prep.yaml", infraCfg.sshUser, ips[1].(string))
+				return fmt.Sprintf("ansible-playbook --private-key ./vars/id_rsa -u %s  -i \"%s,\" ./.ansible/bastion-prep.yaml", infraCfg.sshUser, ips[1].(string))
 			}).(pulumi.StringOutput),
 	})
 	if err != nil {
@@ -446,13 +446,13 @@ func setupKeys(ctx *pulumi.Context, ictx *commonInfra) (err error) {
 	}
 	pkey, err := local.NewCommand(ctx, "gen-privatekey", &local.CommandArgs{
 		Create: ictx.privateKey.PrivateKeyOpenssh.ApplyT(func(privateKey string) string {
-			er := os.WriteFile("./id_rsa", []byte(privateKey), 0600)
+			er := os.WriteFile("./vars/id_rsa", []byte(privateKey), 0600)
 			if er != nil {
 				return "false"
 			}
-			return "echo \"./id_rsa created\""
+			return "echo \"./vars/id_rsa created\""
 		}).(pulumi.StringInput),
-		Delete: pulumi.String("rm -rf ./id_rsa"),
+		Delete: pulumi.String("rm -rf ./vars/id_rsa"),
 	})
 	if err != nil {
 		return

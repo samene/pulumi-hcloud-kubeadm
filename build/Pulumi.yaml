@@ -1,0 +1,9 @@
+name: pulumi-hcloud-kubeadm
+description: A Pulumi project for hetzner cloud k8s
+runtime:
+  name: go
+  options:
+    binary: /home/pulumi-hcloud-kubeadm/bin/pulumi-hcloud-kubeadm
+backend:
+  url: file://./vars
+config: "./vars"

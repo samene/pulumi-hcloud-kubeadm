@@ -3,32 +3,47 @@
 A [Pulumi](https://www.pulumi.com/) project in Go to create Hetzner instances and install a kubernetes cluster on them using kubeadm
 
 ## Pre-requisites
-- Go installed (min 1.18) - [How-to](https://go.dev/doc/install)
-- Pulumi installed (latest version recommended) - [How-to](https://www.pulumi.com/docs/install/)
-- Ansible installed (latest version recommended)
+- Docker (latest version recommended)
 - Hetzner account and API key
 - Supported images - `Ubuntu 22.04`, `CentOS 7` and `CentOS Stream 8`
 
 ## How to Run
 
-### Clone Repository
+### Create a volume
 
-```
-git clone https://github.com/samene/pulumi-hcloud-kubeadm.git
-cd pulumi-hcloud-kubeadm
-``````
+Create a local folder on your machine that will be used to store the configuration and generated kubeconfig files. Keep this folder secure since it contains sensitive information.
 
-### Initialize stack (only once)
+```shell
+mkdir ~/hcloud-cluster
+```
 
+### Start the container
+
+Start the container and mount the folder you just created in it. Pass your Hetzner API Key/Token as an env variable to the container
+
+``` shell
+docker run -it \ 
+  -v ~/hcloud-cluster:/home/pulumi-hcloud-kubeadm/vars \
+  -e HCLOUD_TOKEN=xxxxxxxxxxxxxxxxxx \
+  docker.io/samene/pulumi-hcloud-kubeadm:1.0
 ```
-pulumi stack init dev
+
+For the first run, you will be asked to set a password to store the encrypted keys.
+
+``` shell
+Created stack 'production'
+Enter your passphrase to protect config/secrets:  ****
+Re-enter your passphrase to confirm:  ****
+pulumi-hcloud-kubeadm@963b9474dc97:~$ 
 ```
+
+A default configuration will be created at first startup. To setup your own configuration follow the steps below
 
 ### Configure Hetzner Settings
 
-Set configuration for compute and networking
+Set configuration for compute and networking by running below commands or directly editing the file `./vars/Pulumi.production.yaml`
 
-```
+``` shell
 pulumi config set dataCenter ash-dc1            # replace with your desired datacenter
 pulumi config set networkZone us-east           # replace with your desired hcloud network zone
 pulumi config set image ubuntu-22.04            # replace with your desired os image (ubuntu-22.04 or centos-7 or centos-stream-8)
@@ -39,28 +54,16 @@ pulumi config set lbType lb11                   # replace with your desired flav
 pulumi config set sshUser root                  # replace with ssh user name (usually root)
 ```
 
-Set configuration for authentication to HCloud server. 
-
-```
-pulumi config set hcloud:token XXXXXXXXXXX      # replace with your API token (or set env variable)
-```
-
-Set the path of the topology file (relative to current folder, or absolute path)
-
-```
-pulumi config set topologyFile topology.yaml
-```
-
 ### Configure topology
 
-Create a file called `topology.yaml` with following format
+A sample `topology.yaml` is created in `./vars/` folder. Edit this file as per your configuration.
 
 ```yaml
 clusters:
   central:
     cri: containerd              # containerd or docker (defaults to containerd)
     cni: flannel                 # flannel or cilium
-    kubernetes_version: 1.23     # the highest patch version will be selected automatically
+    kubernetes_version: 1.26    # the highest patch version will be selected automatically
     private_registry: my-docker-registry.com:5000
     insecure_registries:         # list of docker registries to add to insecure registries
     - "10.90.84.113:5000"    
@@ -102,6 +105,8 @@ pulumi up
 ```
 
 ## Output
+
+The generated kubeconfig files will be saved to `./vars/` folder and can also be fetched using
 
 ```
 pulumi stack output clusters

@@ -1,5 +1,0 @@
-name: pulumi-hcloud-kubeadm
-description: A Pulumi project for hetzner cloud k8s
-runtime:
-  name: go
-config: "./"  
