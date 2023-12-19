@@ -25,7 +25,7 @@ Start the container and mount the folder you just created in it. Pass your Hetzn
 docker run -it \ 
   -v ~/hcloud-cluster:/home/pulumi-hcloud-kubeadm/vars \
   -e HCLOUD_TOKEN=xxxxxxxxxxxxxxxxxx \
-  docker.io/samene/pulumi-hcloud-kubeadm:1.0
+  docker.io/samene/pulumi-hcloud-kubeadm:v1.0.0
 ```
 
 For the first run, you will be asked to set a password to store the encrypted keys.
