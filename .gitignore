@@ -3,6 +3,5 @@ id_rsa
 inventory-*.ini
 variables-*.yaml
 Pulumi.*.yaml
-topology.yaml
 bin/
 .pulumi/
