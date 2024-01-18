@@ -139,10 +139,11 @@
   - block:
     - name: Get apt key for kubernetes repo
       apt_key:
-        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        url: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key"
+        keyring: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
     - name: Add kubernetes repository
       apt_repository:
-        repo: "deb https://apt.kubernetes.io/ kubernetes-xenial main"
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
         state: present
         filename: kubernetes
         update_cache: true
@@ -164,14 +165,16 @@
       yum_repository:
         name: kubernetes
         description: kubernetes repository
-        baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-$basearch
+        baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/"
         gpgkey:
-        - https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+        - "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/repodata/repomd.xml.key"
         enabled: true
         exclude:
         - kubelet
         - kubeadm
         - kubectl
+        - cri-tools 
+        - kubernetes-cni
     when: ansible_os_family == 'RedHat'
   - block:
     - name: Install containerd
