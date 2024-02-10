@@ -319,14 +319,12 @@
     register: cert_key
   - set_fact:
       certificate_key: "{{ cert_key.stdout }}"
-      cp_endpoint: "{% if groups['master']|length > 1 %}{{ hostvars[groups['master'][0]].public_ip}}{% else %}{{ hostvars[groups['master'][0]].private_ip}}{% endif %}"
-      cp_public_endpoint: "{{ hostvars[groups['master'][0]].public_ip}}"
-  - set_fact:
-      extra_args: "{% if cni == 'cilium' %}--skip-phases=addon/kube-proxy{% endif %}"
+      cp_endpoint: "{{ hostvars[groups['master'][0]].cp_private_ip}}"
+      cp_public_endpoint: "{{ hostvars[groups['master'][0]].cp_public_ip}}"
   - name: Create cluster configuration
     template: src=./templates/k8s-configuration.yml.j2 dest=/tmp/k8s-configuration.yml
   - name: Init
-    shell: "kubeadm init {{ extra_args }} --upload-certs --config /tmp/k8s-configuration.yml"
+    shell: "kubeadm init --upload-certs --config /tmp/k8s-configuration.yml"
     args:
       creates: /etc/kubernetes/admin.conf
   - name: Get join command for control plane
@@ -428,7 +426,7 @@
       register: ds
     - block:
       - set_fact:
-          cp_endpoint: "{% if groups['master']|length > 1 %}{{ hostvars[groups['master'][0]].public_ip}}{% else %}{{ hostvars[groups['master'][0]].private_ip}}{% endif %}"
+          cp_endpoint: "{{ hostvars[groups['master'][0]].cp_private_ip}}"
       - name: Download Cilium CNI
         get_url:
           url: "https://github.com/cilium/cilium-cli/releases/download/v0.14.6/cilium-linux-amd64.tar.gz"

@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/pulumi/pulumi-command/sdk/go/command/local"
 	"github.com/pulumi/pulumi-hcloud/sdk/go/hcloud"
-	tls "github.com/pulumi/pulumi-tls/sdk/v4/go/tls"
+	"github.com/pulumi/pulumi-tls/sdk/v5/go/tls"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -12,14 +12,13 @@ type K8sCluster struct {
 }
 
 type infrastructureConfig struct {
-	workerFlavor  string
-	masterFlavor  string
-	bastionFlavor string
-	lbType        string
-	image         string
-	networkZone   string
-	dataCenter    string
-	sshUser       string
+	workerFlavor string
+	masterFlavor string
+	lbType       string
+	image        string
+	networkZone  string
+	dataCenter   string
+	sshUser      string
 }
 
 type commonInfra struct {

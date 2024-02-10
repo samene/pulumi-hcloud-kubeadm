@@ -21,3 +21,7 @@ certificateKey: {{certificate_key}}
 nodeRegistration:
   criSocket: unix:///var/run/cri-dockerd.sock
 {% endif %}
+{% if cni == 'cilium' %}
+skipPhases:
+  - addon/kube-proxy
+{% endif %}

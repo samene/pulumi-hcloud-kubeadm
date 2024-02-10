@@ -6,9 +6,9 @@
 [master]
 {{- range $master := .MasterIPs }}
 {{- if $.LoadBalancer }}
-{{ $master.PrivateIP }} public_ip={{ $.LoadBalancer.PublicIP }} private_ip={{ $master.PrivateIP }} nat=true
+{{ $master.PrivateIP }} cp_public_ip={{ $.LoadBalancer.PublicIP }} cp_private_ip={{ $.LoadBalancer.PrivateIP }} nat=true
 {{- else }}
-{{ $master.PrivateIP }} public_ip={{ $master.PublicIP }} private_ip={{ $master.PrivateIP }} nat=false
+{{ $master.PrivateIP }} cp_public_ip={{ $master.PublicIP }} cp_private_ip={{ $master.PrivateIP }} nat=false
 {{- end }}
 {{- end }}
 

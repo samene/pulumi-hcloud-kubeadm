@@ -14,7 +14,7 @@ import (
 
 	"github.com/pulumi/pulumi-command/sdk/go/command/local"
 	"github.com/pulumi/pulumi-hcloud/sdk/go/hcloud"
-	tls "github.com/pulumi/pulumi-tls/sdk/v4/go/tls"
+	"github.com/pulumi/pulumi-tls/sdk/v5/go/tls"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/rs/zerolog/log"
 
@@ -59,7 +59,6 @@ func readConfig(ctx *pulumi.Context) (*infrastructureConfig, *Topology) {
 	infraCfg.masterFlavor = conf.Require("masterFlavor")
 	infraCfg.networkZone = conf.Require("networkZone")
 	infraCfg.dataCenter = conf.Require("dataCenter")
-	infraCfg.bastionFlavor = conf.Require("bastionFlavor")
 	infraCfg.lbType = conf.Require("lbType")
 	infraCfg.image = conf.Require("image")
 	infraCfg.sshUser = conf.Require("sshUser")
@@ -156,7 +155,7 @@ func deploy(ctx *pulumi.Context) (err error) {
 }
 
 func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sCluster *K8sCluster) (config *pulumi.MapOutput, err error) {
-	_, err = local.NewCommand(ctx, fmt.Sprintf("gen-inventory-%s", clusterName), &local.CommandArgs{
+	inv, err := local.NewCommand(ctx, fmt.Sprintf("gen-inventory-%s", clusterName), &local.CommandArgs{
 		Create: pulumi.All(infraWaitFor).ApplyT(func(notUsed []interface{}) (string, error) {
 			// add common bastio
 			*ictx.inventory.Bastion = *ictx.core.bastion
@@ -171,7 +170,7 @@ func installK8s(ctx *pulumi.Context, clusterName string, ictx *infra, pulumik8sC
 	}
 	bastionSetup, err := local.NewCommand(ctx, fmt.Sprintf("ansible-setup-nat-%s", clusterName), &local.CommandArgs{
 		Create: pulumi.String(fmt.Sprintf("ansible-playbook -i ./vars/inventory-%s.ini ./.ansible/bastion.yaml", clusterName)),
-	}, pulumi.DependsOn([]pulumi.Resource{ictx.core.bastionSetup}), pulumi.Parent(pulumik8sCluster))
+	}, pulumi.DependsOn([]pulumi.Resource{ictx.core.bastionSetup, inv}), pulumi.Parent(pulumik8sCluster))
 	if err != nil {
 		return nil, err
 	}
@@ -380,9 +379,9 @@ func setupCtrlPlaneNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ic
 
 func setupNATAndBastionHost(ctx *pulumi.Context, infraCfg *infrastructureConfig, coreinfra *commonInfra) (err error) {
 	coreinfra.jumpServer, err = hcloud.NewServer(ctx, "jump-server", &hcloud.ServerArgs{
-		Image:                 pulumi.String(infraCfg.image),
+		Image:                 pulumi.String("ubuntu-22.04"),
 		Datacenter:            pulumi.String(infraCfg.dataCenter),
-		ServerType:            pulumi.String(infraCfg.bastionFlavor),
+		ServerType:            pulumi.String("cpx11"),
 		SshKeys:               pulumi.StringArray{coreinfra.sshKey.ID()},
 		AllowDeprecatedImages: pulumi.Bool(true),
 		PublicNets: hcloud.ServerPublicNetArray{hcloud.ServerPublicNetArgs{

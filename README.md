@@ -47,7 +47,6 @@ Set configuration for compute and networking by running below commands or direct
 pulumi config set dataCenter ash-dc1            # replace with your desired datacenter
 pulumi config set networkZone us-east           # replace with your desired hcloud network zone
 pulumi config set image ubuntu-22.04            # replace with your desired os image (ubuntu-22.04 or centos-7 or centos-stream-8)
-pulumi config set bastionFlavor cpx11           # replace with your desired flavor for bastion/NAT node
 pulumi config set masterFlavor cpx31            # replace with your desired flavor for clontrol plane nodes
 pulumi config set workerFlavor cpx41            # replace with your your desired flavor for worker nodes
 pulumi config set lbType lb11                   # replace with your desired flavor forload balancer type
@@ -63,7 +62,7 @@ clusters:
   central:
     cri: containerd              # containerd or docker (defaults to containerd)
     cni: flannel                 # flannel or cilium
-    kubernetes_version: 1.26    # the highest patch version will be selected automatically
+    kubernetes_version: 1.29     # the highest patch version will be selected automatically
     private_registry: my-docker-registry.com:5000
     insecure_registries:         # list of docker registries to add to insecure registries
     - "10.90.84.113:5000"    

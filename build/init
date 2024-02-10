@@ -13,7 +13,6 @@ if ! pulumi stack --show-name --non-interactive 2>/dev/null && ! pulumi stack se
     pulumi config set --path dataCenter "fsn1-dc14" --non-interactive
     pulumi config set --path networkZone "eu-central" --non-interactive
     pulumi config set --path image "ubuntu-22.04" --non-interactive
-    pulumi config set --path bastionFlavor "cpx11" --non-interactive
     pulumi config set --path masterFlavor "cpx31" --non-interactive
     pulumi config set --path workerFlavor "cpx41" --non-interactive
     pulumi config set --path lbType "lb11" --non-interactive

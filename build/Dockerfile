@@ -1,4 +1,4 @@
-FROM golang:1.21-bullseye AS builder
+FROM golang:1.22-bullseye AS builder
 WORKDIR /usr/src/pulumi-hcloud-kubeadm
 COPY ./go/go.mod ./go/go.sum ./
 RUN go mod download && go mod verify
@@ -6,8 +6,8 @@ COPY ./go/ ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -v -o /usr/local/bin/pulumi-hcloud-kubeadm --ldflags "-s -w" .
 
 FROM debian:stable-slim
-ARG GO_VERSION="1.21.5"
-ARG PULUMI_VERSION="3.97.0"
+ARG GO_VERSION="1.22.0"
+ARG PULUMI_VERSION="3.105.0"
 
 RUN apt-get update && apt-get install -y python3 python3-pip python3-venv bash curl wget vim jq ansible openssl netcat-openbsd && \
     rm -rf /var/lib/apt/lists/* && \
@@ -45,9 +45,9 @@ COPY --chown=pulumi-hcloud-kubeadm:pulumi-hcloud-kubeadm ./ansible /home/pulumi-
 
 RUN mkdir -p ./vars && \
     pulumi login --local && \
-    pulumi plugin install resource command v0.9.1 --exact && \
-    pulumi plugin install resource hcloud v1.14.0 --exact && \
-    pulumi plugin install resource tls v5.0.0 --exact
+    pulumi plugin install resource command v0.9.2 --exact && \
+    pulumi plugin install resource hcloud v1.17.0 --exact && \
+    pulumi plugin install resource tls v5.0.1 --exact
 
 VOLUME /home/pulumi-hcloud-kubeadm/vars
 
