@@ -1,0 +1,37 @@
+repositories:
+- name: prometheus-community
+  url: https://prometheus-community.github.io/helm-charts
+- name: jetstack
+  url: https://charts.jetstack.io
+- name: ingress-nginx
+  url: https://kubernetes.github.io/ingress-nginx
+- name: metrics-server
+  url: https://kubernetes-sigs.github.io/metrics-server 
+
+releases:
+- name: metrics-server
+  namespace: kube-system
+  chart: metrics-server/metrics-server
+  values:
+  - /tmp/metrics-server-values.yaml
+- name: ingress-nginx
+  namespace: ingress-nginx
+  chart: ingress-nginx/ingress-nginx
+  values:
+  - /tmp/ingress-nginx-values.yaml  
+- name: cert-manager
+  namespace: cert-manager
+  chart: jetstack/cert-manager
+  set:
+  - name: installCRDs
+    value: true
+- name: prometheus
+  namespace: prometheus
+  chart: prometheus-community/prometheus
+  set:
+  - name: alertmanager.enabled
+    value: false
+  - name: prometheus-pushgateway.enabled
+    value: false
+  - name: server.retention
+    value: 2d

@@ -1,0 +1,10 @@
+controller:
+  ingressClassResource:
+    default: true
+  service:
+    type: NodePort
+    nodePorts:
+      http: 31394
+      https: 31390
+defaultBackend:
+  enabled: true

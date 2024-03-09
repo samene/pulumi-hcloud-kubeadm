@@ -365,7 +365,7 @@
     args:
       creates: /etc/kubernetes/kubelet.conf
 
-- name: CNI and metrics-server
+- name: Install CNI
   hosts: master[0]
   tags:
   - cni
@@ -373,7 +373,7 @@
   any_errors_fatal: true
   become: true
   tasks:
-  - name: Move kubeconfig
+  - name: Copy kubeconfig
     shell: "mkdir -p {{ansible_env.HOME}}/.kube && cp /etc/kubernetes/admin.conf {{ansible_env.HOME}}/.kube/config && chown {{ansible_user}}:{{ansible_user}} {{ansible_env.HOME}}/.kube/config"
     args:
       creates: "{{ansible_env.HOME}}/.kube/config"
@@ -409,7 +409,6 @@
       src: "./files/{{item}}"
       dest: "/tmp/{{item}}"
     loop:
-    - metrics-server.yaml
     - kube-flannel.yml
 
   - block:
@@ -444,9 +443,6 @@
 
     when: "cni == 'cilium'"
 
-  - name: Install metrics server
-    shell: kubectl apply -f /tmp/metrics-server.yaml
-
 - name: Workers
   hosts: worker
   tags:
@@ -465,3 +461,35 @@
     shell: "{{joincmd}} {{extra_args}}"
     args:
       creates: /etc/kubernetes/kubelet.conf
+
+- name: Post install
+  hosts: master[0]
+  tags:
+  - charts
+  any_errors_fatal: true
+  become: true
+  tasks:
+  - name: Install Helm
+    shell: "curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
+    args:
+      creates: /usr/local/bin/helm
+  - name: Install helmfile
+    shell: "curl -Lf https://github.com/helmfile/helmfile/releases/download/v0.162.0/helmfile_0.162.0_linux_amd64.tar.gz -o helmfile.tar.gz && tar -xvf helmfile.tar.gz && chmod +x helmfile && mv helmfile /usr/local/bin/helmfile && helm plugin install https://github.com/databus23/helm-diff"
+    args:
+      creates: /usr/local/bin/helmfile
+  - name: Copy helmfile and values files
+    copy:
+      src: "./files/{{item}}"
+      dest: "/tmp/{{item}}"
+    loop:
+    - ingress-nginx-values.yaml
+    - metrics-server-values.yaml
+    - helmfile.yaml
+  - name: Install local-path-provisioner
+    shell: "kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.26/deploy/local-path-storage.yaml"
+  - name: Set default storage class
+    shell: "kubectl patch storageclass local-path -p '{\"metadata\": {\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}'"
+  - name: Install Helm charts
+    shell: "helmfile apply"
+    args: 
+      chdir: /tmp

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"regexp"
 	"text/template"
 
@@ -252,7 +253,29 @@ func setupLoadBalancer(ctx *pulumi.Context, infraCfg *infrastructureConfig, ictx
 	if err != nil {
 		return
 	}
+	// always create for http and https
+	_, err = hcloud.NewLoadBalancerService(ctx, fmt.Sprintf("lbService-%s-%s-%d", clusterName, "ingress-http", 80), &hcloud.LoadBalancerServiceArgs{
+		LoadBalancerId:  ictx.loadBal.ID(),
+		Protocol:        pulumi.String("tcp"),
+		DestinationPort: pulumi.Int(31394),
+		ListenPort:      pulumi.Int(80),
+	}, pulumi.Parent(pulumik8sCluster))
+	if err != nil {
+		return
+	}
+	_, err = hcloud.NewLoadBalancerService(ctx, fmt.Sprintf("lbService-%s-%s-%d", clusterName, "ingress-https", 443), &hcloud.LoadBalancerServiceArgs{
+		LoadBalancerId:  ictx.loadBal.ID(),
+		Protocol:        pulumi.String("tcp"),
+		DestinationPort: pulumi.Int(31390),
+		ListenPort:      pulumi.Int(443),
+	}, pulumi.Parent(pulumik8sCluster))
+	if err != nil {
+		return
+	}
 	for name, mapping := range c.LoadBalancer.PortMappings {
+		if mapping.Source == 80 || mapping.Source == 443 {
+			return errors.New("ports 80 and 443 cannot be defined for loadbalancer. They default to 80:31394 443:31390")
+		}
 		_, err = hcloud.NewLoadBalancerService(ctx, fmt.Sprintf("lbService-%s-%s-%d", clusterName, name, mapping.Source), &hcloud.LoadBalancerServiceArgs{
 			LoadBalancerId:  ictx.loadBal.ID(),
 			Protocol:        pulumi.String("tcp"),

@@ -68,13 +68,13 @@ clusters:
     - "10.90.84.113:5000"    
     load_balancer:
       create: true               # create a load balancer node
-      port_mappings:             # target port mappings
-        https:
-          source: 443
-          target: 31390
-        http:
-          source: 80
-          target: 31394
+      #port_mappings:            # any extra target port mappings, other than 80 & 443
+      #  https:                  # 31390 -> 443    }
+      #    source: 8443          # 31394 -> 80     } these are created by default
+      #    target: 31345
+      #  http:
+      #    source: 8080
+      #    target: 31367
     control_plane:
       node_count: 3              # 1 or 3 (if 3, one Load Balancer will be created)
     worker:
@@ -82,7 +82,7 @@ clusters:
   edge-1:
     cri: docker
     cni: flannel
-    kubernetes_version: 1.23
+    kubernetes_version: 1.28
     private_registry: my-docker-registry.com:5000
     insecure_registries: []
     load_balancer:
