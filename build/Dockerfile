@@ -6,10 +6,10 @@ COPY ./go/ ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -v -o /usr/local/bin/pulumi-hcloud-kubeadm --ldflags "-s -w" .
 
 FROM debian:stable-slim
-ARG GO_VERSION="1.22.0"
-ARG PULUMI_VERSION="3.105.0"
+ARG GO_VERSION="1.22.3"
+ARG PULUMI_VERSION="3.115.2"
 
-RUN apt-get update && apt-get install -y python3 python3-pip python3-venv bash curl wget vim jq ansible openssl netcat-openbsd && \
+RUN apt-get update && apt-get install -y python3 python3-pip python3-venv bash curl wget vim jq pipx openssl openssh-client sshpass netcat-openbsd && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf $(python3 -c "import sysconfig; print(sysconfig.get_path(\"stdlib\"))")/EXTERNALLY-MANAGED
 
@@ -20,7 +20,10 @@ RUN curl https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz -Lo /tmp/go${GO_VE
 
 COPY ./ansible/ansible.cfg /etc/ansible/ansible.cfg
 
-USER pulumi-hcloud-kubeadm   
+USER pulumi-hcloud-kubeadm
+
+RUN pipx install --include-deps ansible && \
+    pipx ensurepath
 RUN mkdir ~/.pulumi && \ 
     curl https://get.pulumi.com/releases/sdk/pulumi-v${PULUMI_VERSION}-linux-x64.tar.gz -Lo /tmp/pulumi-v${PULUMI_VERSION}-linux-x64.tar.gz && \
     tar -zxf /tmp/pulumi-v${PULUMI_VERSION}-linux-x64.tar.gz -C /tmp && \
@@ -35,7 +38,7 @@ WORKDIR /home/pulumi-hcloud-kubeadm
 ENV PULUMI_HOME=/home/pulumi-hcloud-kubeadm/.pulumi \
     PULUMI_SKIP_UPDATE_CHECK=true \
     PULUMI_K8S_ENABLE_PATCH_FORCE=true \
-    PATH=${PATH}:/usr/local/go/bin:/home/pulumi-hcloud-kubeadm/.pulumi/bin
+    PATH=${PATH}:/usr/local/go/bin:/home/pulumi-hcloud-kubeadm/.pulumi/bin:/home/pulumi-hcloud-kubeadm/.local/bin
 
 COPY --chown=pulumi-hcloud-kubeadm:pulumi-hcloud-kubeadm --from=builder /usr/local/bin/pulumi-hcloud-kubeadm /home/pulumi-hcloud-kubeadm/bin/
 COPY --chown=pulumi-hcloud-kubeadm:pulumi-hcloud-kubeadm build/Pulumi.yaml .
@@ -45,9 +48,9 @@ COPY --chown=pulumi-hcloud-kubeadm:pulumi-hcloud-kubeadm ./ansible /home/pulumi-
 
 RUN mkdir -p ./vars && \
     pulumi login --local && \
-    pulumi plugin install resource command v0.9.2 --exact && \
-    pulumi plugin install resource hcloud v1.17.0 --exact && \
-    pulumi plugin install resource tls v5.0.1 --exact
+    pulumi plugin install resource command v0.10.0 --exact && \
+    pulumi plugin install resource hcloud v1.19.0 --exact && \
+    pulumi plugin install resource tls v5.0.3 --exact
 
 VOLUME /home/pulumi-hcloud-kubeadm/vars
 

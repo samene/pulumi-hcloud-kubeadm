@@ -1,11 +1,21 @@
 # pulumi-hcloud-kubeadm
 
-A [Pulumi](https://www.pulumi.com/) project in Go to create Hetzner instances and install a kubernetes cluster on them using kubeadm
+A [Pulumi](https://www.pulumi.com/) project in Go to create [Hetzner](https://www.hetzner.com/) instances and install a Kubernetes cluster on them using kubeadm
 
-## Pre-requisites
+## Pre-requisites & Supported Versions
 - Docker (latest version recommended)
 - Hetzner account and API key
-- Supported images - `Ubuntu 22.04`, `CentOS 7` and `CentOS Stream 8`
+- Supported images:
+  | name           |    OS           |
+  |----------------|-----------------|
+  |`ubuntu-24.04`    | Ubuntu 24.04    |
+  |`ubuntu-22.04`    | Ubuntu 22.04    |  
+  |`centos-7`        | CentOS 7        |
+  |`centos-stream-8` | CentOS Stream 8 |
+- Kubernetes versions supported (certified working)
+
+  Min: `1.24`
+  Max: `1.29`
 
 ## How to Run
 
@@ -19,13 +29,13 @@ mkdir ~/hcloud-cluster
 
 ### Start the container
 
-Start the container and mount the folder you just created in it. Pass your Hetzner API Key/Token as an env variable to the container
+Start the container and mount the folder you just created. Pass your Hetzner API Key/Token as an env variable to the container
 
 ``` shell
 docker run -it \ 
   -v ~/hcloud-cluster:/home/pulumi-hcloud-kubeadm/vars \
   -e HCLOUD_TOKEN=xxxxxxxxxxxxxxxxxx \
-  docker.io/samene/pulumi-hcloud-kubeadm:v1.0.0
+  docker.io/samene/pulumi-hcloud-kubeadm:<release>
 ```
 
 For the first run, you will be asked to set a password to store the encrypted keys.
@@ -46,7 +56,7 @@ Set configuration for compute and networking by running below commands or direct
 ``` shell
 pulumi config set dataCenter ash-dc1            # replace with your desired datacenter
 pulumi config set networkZone us-east           # replace with your desired hcloud network zone
-pulumi config set image ubuntu-22.04            # replace with your desired os image (ubuntu-22.04 or centos-7 or centos-stream-8)
+pulumi config set image ubuntu-24.04            # replace with your desired os image
 pulumi config set masterFlavor cpx31            # replace with your desired flavor for clontrol plane nodes
 pulumi config set workerFlavor cpx41            # replace with your your desired flavor for worker nodes
 pulumi config set lbType lb11                   # replace with your desired flavor forload balancer type
@@ -69,10 +79,10 @@ clusters:
     load_balancer:
       create: true               # create a load balancer node
       #port_mappings:            # any extra target port mappings, other than 80 & 443
-      #  https:                  # 31390 -> 443    }
-      #    source: 8443          # 31394 -> 80     } these are created by default
+      #  custom-https:           # 443 -> 31390    }
+      #    source: 8443          # 80 -> 31394     } these are created by default
       #    target: 31345
-      #  http:
+      #  custom-http:
       #    source: 8080
       #    target: 31367
     control_plane:
@@ -88,7 +98,7 @@ clusters:
     load_balancer:
       create: true
       port_mappings:
-        tls:
+        my-tls:
           source: 15443
           target: 31391
     control_plane:
@@ -105,8 +115,9 @@ pulumi up
 
 ## Output
 
-The generated kubeconfig files will be saved to `./vars/` folder and can also be fetched using
+The generated kubeconfig files will be saved to `./vars/` folder and can also be fetched using:
 
 ```
-pulumi stack output clusters
+PULUMI_CONFIG_PASSPHRASE=xxxxxxx pulumi stack output clusters --show-secrets | jq -r '.[0].<clustername>.kubeconfig' > vars/mykubeconfig
 ```
+replace <clustername> with the name from `topology.yaml`, for example, `central` is the name of the cluster.

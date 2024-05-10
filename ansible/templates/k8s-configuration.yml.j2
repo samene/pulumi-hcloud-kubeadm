@@ -11,7 +11,9 @@ controlPlaneEndpoint: {{ cp_endpoint }}
 apiServer:
   certSANs:
   - "{{ cp_endpoint }}"
+  {% if cp_public_endpoint != '' -%}
   - "{{ cp_public_endpoint }}"
+  {%- endif %}
 
 ---
 apiVersion: kubeadm.k8s.io/v1beta3

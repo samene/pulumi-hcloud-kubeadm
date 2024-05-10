@@ -320,11 +320,15 @@
   - set_fact:
       certificate_key: "{{ cert_key.stdout }}"
       cp_endpoint: "{{ hostvars[groups['master'][0]].cp_private_ip}}"
-      cp_public_endpoint: "{{ hostvars[groups['master'][0]].cp_public_ip}}"
+      cp_public_endpoint: "{{ hostvars[groups['master'][0]].cp_public_ip | default('') }}"
   - name: Create cluster configuration
     template: src=./templates/k8s-configuration.yml.j2 dest=/tmp/k8s-configuration.yml
   - name: Init
     shell: "kubeadm init --upload-certs --config /tmp/k8s-configuration.yml"
+    args:
+      creates: /etc/kubernetes/admin.conf
+  - name: Init-Upload Certs
+    shell: "kubeadm init phase upload-certs --upload-certs --certificate-key {{ certificate_key }}"
     args:
       creates: /etc/kubernetes/admin.conf
   - name: Get join command for control plane
@@ -371,12 +375,16 @@
   - cni
   - controlplane
   any_errors_fatal: true
-  become: true
   tasks:
+  - setup:
+  - name: Get home dir
+    set_fact:
+      home_dir: "{{ansible_env.HOME}}"
   - name: Copy kubeconfig
-    shell: "mkdir -p {{ansible_env.HOME}}/.kube && cp /etc/kubernetes/admin.conf {{ansible_env.HOME}}/.kube/config && chown {{ansible_user}}:{{ansible_user}} {{ansible_env.HOME}}/.kube/config"
+    shell: "mkdir -p {{home_dir}}/.kube && cp /etc/kubernetes/admin.conf {{home_dir}}/.kube/config && chown {{ansible_user}}:{{ansible_user}} {{home_dir}}/.kube/config"
+    become: true
     args:
-      creates: "{{ansible_env.HOME}}/.kube/config"
+      creates: "{{home_dir}}/.kube/config"
 
   - block:
 
@@ -391,10 +399,9 @@
 
   - name: Fetch kubeconfig
     fetch:
-      src: "{{ansible_env.HOME}}/.kube/config"
+      src: "{{home_dir}}/.kube/config"
       dest: ../vars/cluster-{{clustername}}.kubeconfig
       flat: true
-    become: false
 
   - name: Change cluster and context name
     local_action: 
@@ -432,6 +439,7 @@
           dest: /tmp/cilium-linux-amd64.tar.gz
       - name: Unpack Cilium CNI
         shell: "tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin"
+        become: true
         args:
           chdir: /tmp
           creates: /usr/local/bin/cilium
@@ -467,16 +475,19 @@
   tags:
   - charts
   any_errors_fatal: true
-  become: true
   tasks:
   - name: Install Helm
     shell: "curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
     args:
       creates: /usr/local/bin/helm
+    become: true
   - name: Install helmfile
-    shell: "curl -Lf https://github.com/helmfile/helmfile/releases/download/v0.162.0/helmfile_0.162.0_linux_amd64.tar.gz -o helmfile.tar.gz && tar -xvf helmfile.tar.gz && chmod +x helmfile && mv helmfile /usr/local/bin/helmfile && helm plugin install https://github.com/databus23/helm-diff"
+    shell: "curl -Lf https://github.com/helmfile/helmfile/releases/download/v0.162.0/helmfile_0.162.0_linux_amd64.tar.gz -o helmfile.tar.gz && tar -xvf helmfile.tar.gz && chmod +x helmfile && mv helmfile /usr/local/bin/helmfile"
     args:
       creates: /usr/local/bin/helmfile
+    become: true
+  - name: Install helm diff plugin
+    shell: helm plugin install https://github.com/databus23/helm-diff
   - name: Copy helmfile and values files
     copy:
       src: "./files/{{item}}"

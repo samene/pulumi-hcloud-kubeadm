@@ -24,7 +24,7 @@ releases:
   chart: jetstack/cert-manager
   set:
   - name: installCRDs
-    value: true
+    value: "true"
 - name: prometheus
   namespace: prometheus
   chart: prometheus-community/prometheus

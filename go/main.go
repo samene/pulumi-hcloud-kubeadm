@@ -402,7 +402,7 @@ func setupCtrlPlaneNodes(ctx *pulumi.Context, infraCfg *infrastructureConfig, ic
 
 func setupNATAndBastionHost(ctx *pulumi.Context, infraCfg *infrastructureConfig, coreinfra *commonInfra) (err error) {
 	coreinfra.jumpServer, err = hcloud.NewServer(ctx, "jump-server", &hcloud.ServerArgs{
-		Image:                 pulumi.String("ubuntu-22.04"),
+		Image:                 pulumi.String("ubuntu-24.04"),
 		Datacenter:            pulumi.String(infraCfg.dataCenter),
 		ServerType:            pulumi.String("cpx11"),
 		SshKeys:               pulumi.StringArray{coreinfra.sshKey.ID()},
